@@ -14,6 +14,8 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
+import { VOICE_STT_SAMPLE_RATE } from "@t3tools/contracts";
+
 import * as ServerConfig from "../config.ts";
 import {
   applyPhraseBook,
@@ -24,7 +26,6 @@ import {
 import { toSpeakableText } from "./speechText.ts";
 import { float32ToWav } from "./wav.ts";
 
-export const STT_SAMPLE_RATE = 16_000;
 const MODEL_THREADS = 2;
 
 class VoiceModelsMissingError extends Data.TaggedError("VoiceModelsMissingError")<{
@@ -146,7 +147,7 @@ export const resolveParakeetConfig = Effect.fn("voice.resolveParakeetConfig")(fu
     });
   }
   return {
-    featConfig: { sampleRate: STT_SAMPLE_RATE, featureDim: 80 },
+    featConfig: { sampleRate: VOICE_STT_SAMPLE_RATE, featureDim: 80 },
     modelConfig: {
       transducer: {
         encoder: path.join(modelDir, encoder),

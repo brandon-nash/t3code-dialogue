@@ -1,91 +1,164 @@
 /**
- * Client for the server's /api/voice routes (spike). Talks to the primary environment, the
- * same server the desktop app runs or the browser was opened from, with the same
- * credentials the rest of the primary HTTP client uses.
+ * Voice for a thread's environment. Requests go through the connection runtime, so the server
+ * that owns the thread does the work with the credentials the rest of its traffic uses.
  */
-import { readDesktopPrimaryBearerToken } from "../environments/primary/desktopAuth";
-import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary/target";
+import {
+  createRuntimeCommand,
+  runAtomCommand,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { VoiceClient } from "@t3tools/client-runtime/state/voiceHttp";
+import {
+  AuthOrchestrationOperateScope,
+  type EnvironmentId,
+  type VoiceStatus,
+  type VoiceTranscription,
+} from "@t3tools/contracts";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import type { AtomRegistry } from "effect/reactivity";
 
-export type VoiceComponentState =
-  | { readonly state: "ready" | "idle" }
-  | { readonly state: "missing_models" | "unavailable"; readonly detail: string };
+import { connectionAtomRuntime } from "../connection/runtime";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { environmentSession, readEnvironmentScope } from "../state/session";
 
-export interface VoiceStatus {
-  readonly voiceDir: string;
-  readonly stt: VoiceComponentState;
-  readonly tts: VoiceComponentState;
-}
-
-export interface VoiceTranscription {
-  readonly text: string;
-  readonly rawText: string;
-  readonly audioMs: number;
-  readonly decodeMs: number;
-}
+export type VoiceAvailability =
+  | { readonly kind: "absent" }
+  | { readonly kind: "present"; readonly status: VoiceStatus };
 
 export class VoiceRequestError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status: number) {
+  constructor(message: string) {
     super(message);
     this.name = "VoiceRequestError";
-    this.status = status;
   }
 }
 
-async function voiceFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const url = resolvePrimaryEnvironmentHttpUrl(`/api/voice/${path}`);
-  const sameOrigin =
-    typeof window !== "undefined" &&
-    window.desktopBridge === undefined &&
-    new URL(url).origin === window.location.origin;
-  const headers = new Headers(init.headers);
-  if (!sameOrigin) {
-    const token = await readDesktopPrimaryBearerToken();
-    if (token) headers.set("authorization", `Bearer ${token}`);
+class VoiceEnvironmentDisconnectedError extends Data.TaggedError(
+  "VoiceEnvironmentDisconnectedError",
+)<{}> {}
+
+const preparedConnection = (environmentId: EnvironmentId, registry: AtomRegistry.AtomRegistry) =>
+  Effect.suspend(() =>
+    Effect.fromOption(
+      registry.get(environmentSession.preparedConnectionValueAtom(environmentId)),
+      () => new VoiceEnvironmentDisconnectedError(),
+    ),
+  );
+
+const statusCommand = createRuntimeCommand(connectionAtomRuntime, {
+  label: "web:voice:status",
+  execute: Effect.fn("web.voice.status")(function* (
+    input: { readonly environmentId: EnvironmentId },
+    registry: AtomRegistry.AtomRegistry,
+  ) {
+    const prepared = yield* preparedConnection(input.environmentId, registry);
+    return yield* (yield* VoiceClient).status(prepared);
+  }),
+});
+
+const transcribeCommand = createRuntimeCommand(connectionAtomRuntime, {
+  label: "web:voice:transcribe",
+  execute: Effect.fn("web.voice.transcribe")(function* (
+    input: { readonly environmentId: EnvironmentId; readonly pcm: Uint8Array },
+    registry: AtomRegistry.AtomRegistry,
+  ) {
+    const prepared = yield* preparedConnection(input.environmentId, registry);
+    return yield* (yield* VoiceClient).transcribe(prepared, input.pcm);
+  }),
+});
+
+const speakCommand = createRuntimeCommand(connectionAtomRuntime, {
+  label: "web:voice:speak",
+  execute: Effect.fn("web.voice.speak")(function* (
+    input: { readonly environmentId: EnvironmentId; readonly text: string },
+    registry: AtomRegistry.AtomRegistry,
+  ) {
+    const prepared = yield* preparedConnection(input.environmentId, registry);
+    return yield* (yield* VoiceClient).speak(prepared, input.text);
+  }),
+});
+
+const QUIET = { reportFailure: false, reportDefect: false } as const;
+
+const tagOf = (cause: unknown): string | null =>
+  typeof cause === "object" && cause !== null && "_tag" in cause && typeof cause._tag === "string"
+    ? cause._tag
+    : null;
+
+/** An environment that cannot serve voice at all, as opposed to one whose request failed. */
+function isVoiceAbsent(cause: unknown): boolean {
+  switch (tagOf(cause)) {
+    case "VoiceEnvironmentDisconnectedError":
+    case "EnvironmentScopeRequiredError":
+      return true;
+    case "RemoteEnvironmentAuthUndeclaredStatusError":
+      return (cause as { readonly status: number }).status === 404;
+    default:
+      return false;
   }
-  const response = await fetch(url, {
-    ...init,
-    headers,
-    credentials: sameOrigin ? "include" : "omit",
-  });
-  if (!response.ok && response.status !== 204) {
-    const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new VoiceRequestError(
-      body?.detail ?? `Voice request failed (${response.status}).`,
-      response.status,
-    );
-  }
-  return response;
 }
 
-export async function fetchVoiceStatus(signal?: AbortSignal): Promise<VoiceStatus> {
-  const response = await voiceFetch("status", signal ? { signal } : {});
-  return (await response.json()) as VoiceStatus;
+function describeFailure(cause: unknown): VoiceRequestError {
+  switch (tagOf(cause)) {
+    case "VoiceUnavailableError":
+    case "VoiceFailedError":
+      return new VoiceRequestError((cause as { readonly detail: string }).detail);
+    case "VoiceEnvironmentDisconnectedError":
+      return new VoiceRequestError("The environment is not connected.");
+    case "EnvironmentScopeRequiredError":
+      return new VoiceRequestError("This connection cannot use voice.");
+    case "RemoteEnvironmentAuthTimeoutError":
+      return new VoiceRequestError("The voice request timed out.");
+    default:
+      return new VoiceRequestError(
+        cause instanceof Error && cause.message.length > 0
+          ? cause.message
+          : "Voice request failed.",
+      );
+  }
+}
+
+/** Absent covers servers without voice routes and sessions that may not operate them. */
+export async function fetchVoiceStatus(environmentId: EnvironmentId): Promise<VoiceAvailability> {
+  if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) {
+    return { kind: "absent" };
+  }
+  const result = await runAtomCommand(appAtomRegistry, statusCommand, { environmentId }, QUIET);
+  if (result._tag === "Success") return { kind: "present", status: result.value };
+  const cause = squashAtomCommandFailure(result);
+  if (isVoiceAbsent(cause)) return { kind: "absent" };
+  throw describeFailure(cause);
 }
 
 /** `pcm` is mono PCM16LE at 16 kHz. */
 export async function transcribeSpeech(
-  pcm: Uint8Array<ArrayBuffer>,
-  signal?: AbortSignal,
+  environmentId: EnvironmentId,
+  pcm: Uint8Array,
 ): Promise<VoiceTranscription> {
-  const response = await voiceFetch("transcribe", {
-    method: "POST",
-    headers: { "content-type": "application/octet-stream" },
-    body: pcm,
-    ...(signal ? { signal } : {}),
-  });
-  return (await response.json()) as VoiceTranscription;
+  const result = await runAtomCommand(
+    appAtomRegistry,
+    transcribeCommand,
+    { environmentId, pcm },
+    QUIET,
+  );
+  if (result._tag === "Success") return result.value;
+  throw describeFailure(squashAtomCommandFailure(result));
 }
 
-/** Returns WAV bytes, or null when the reply had nothing worth saying. */
-export async function synthesizeReply(text: string, signal?: AbortSignal): Promise<Blob | null> {
-  const response = await voiceFetch("speak", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text }),
-    ...(signal ? { signal } : {}),
-  });
-  if (response.status === 204) return null;
-  return await response.blob();
+/** Returns WAV audio, or null when the reply had nothing worth saying. */
+export async function synthesizeReply(
+  environmentId: EnvironmentId,
+  text: string,
+): Promise<Blob | null> {
+  const result = await runAtomCommand(
+    appAtomRegistry,
+    speakCommand,
+    { environmentId, text },
+    QUIET,
+  );
+  if (result._tag !== "Success") throw describeFailure(squashAtomCommandFailure(result));
+  return Option.isSome(result.value)
+    ? new Blob([result.value.value.wav as BlobPart], { type: "audio/wav" })
+    : null;
 }

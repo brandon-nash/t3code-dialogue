@@ -1,4 +1,5 @@
 /** Push-to-talk dictation: record, convert to 16 kHz PCM, transcribe on the server's Parakeet. */
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 
 import { useStableCallback } from "../hooks/useStableCallback";
@@ -11,6 +12,8 @@ const MAX_RECORDING_MS = 5 * 60 * 1000;
 export type VoiceInputPhase = "idle" | "starting" | "recording" | "transcribing";
 
 interface ActiveRecording {
+  /** The recording transcribes where it started, even if the composer moves on. */
+  readonly environmentId: EnvironmentId;
   readonly recorder: MediaRecorder;
   readonly stream: MediaStream;
   readonly chunks: Blob[];
@@ -31,6 +34,7 @@ function describeVoiceError(cause: unknown): string {
 }
 
 export function useVoiceInput(options: {
+  readonly environmentId: EnvironmentId;
   readonly onTranscript: (text: string) => void;
   readonly onRecordingStart?: () => void;
   readonly onError: (message: string) => void;
@@ -60,7 +64,10 @@ export function useVoiceInput(options: {
     updatePhase("transcribing");
     try {
       const blob = new Blob(recording.chunks, { type: recording.recorder.mimeType });
-      const result = await transcribeSpeech(await recordingToSpeechPcm(blob));
+      const result = await transcribeSpeech(
+        recording.environmentId,
+        await recordingToSpeechPcm(blob),
+      );
       if (result.text.length > 0) options.onTranscript(result.text);
     } catch (cause) {
       options.onError(describeVoiceError(cause));
@@ -87,6 +94,7 @@ export function useVoiceInput(options: {
       });
       const recorder = new MediaRecorder(stream);
       const recording: ActiveRecording = {
+        environmentId: options.environmentId,
         recorder,
         stream,
         chunks: [],

@@ -50,12 +50,15 @@ Kokoro voice (the multi-lang v1.0 model ships 53).
 
 ## Server API
 
-All routes need an authenticated session with the orchestration operate scope.
+All routes are part of the typed environment HTTP API (`voice` group in `@t3tools/contracts`) and
+need an authenticated session with the orchestration operate scope. Clients call the environment
+that owns the thread, so a remote thread uses the remote machine's models.
 
 | Route                        | Body                       | Response                                                                           |
 | ---------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
 | `GET /api/voice/status`      |                            | `{ voiceDir, stt, tts }`, each `ready`, `idle`, `missing_models`, or `unavailable` |
 | `POST /api/voice/transcribe` | mono PCM16LE @ 16 kHz      | `{ text, rawText, audioMs, decodeMs }`                                             |
-| `POST /api/voice/speak`      | `{ "text": "<markdown>" }` | `audio/wav`, or 204 if nothing speakable                                           |
+| `POST /api/voice/speak`      | `{ "text": "<markdown>" }` | `audio/wav` with `x-t3-voice-synth-ms`; an empty body means nothing was speakable  |
 
-Setup problems return 503 with a `detail`; the composer shows it in the button tooltip.
+Setup problems return 503 as `VoiceUnavailableError` with a `detail`; the composer shows it in the
+button tooltip.
