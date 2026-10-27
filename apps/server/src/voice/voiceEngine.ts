@@ -24,6 +24,7 @@ import {
   type PhraseBook,
 } from "./phraseBook.ts";
 import { toSpeakableText } from "./speechText.ts";
+import { appendVoiceTiming, VOICE_TIMINGS_FILE } from "./voiceTimings.ts";
 import { float32ToWav } from "./wav.ts";
 
 const MODEL_THREADS = 2;
@@ -237,6 +238,9 @@ const make = Effect.gen(function* () {
   const parakeetDir = path.join(voiceDir, "models", "parakeet");
   const kokoroDir = path.join(voiceDir, "models", "kokoro");
   const settingsPath = path.join(voiceDir, "voice.json");
+  const timingsPath = path.join(config.logsDir, VOICE_TIMINGS_FILE);
+  const recordTiming = (record: Parameters<typeof appendVoiceTiming>[1]) =>
+    withServices(appendVoiceTiming(timingsPath, record));
 
   const withServices = <A, E>(
     effect: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
@@ -261,6 +265,7 @@ const make = Effect.gen(function* () {
   const lock = yield* Semaphore.make(1);
 
   const loadModel = Effect.fn("voice.loadModel")(function* <M>(
+    kind: "stt" | "tts",
     loaded: Ref.Ref<Option.Option<M>>,
     lastError: Ref.Ref<Option.Option<VoiceModelsMissingError | VoiceRuntimeUnavailableError>>,
     create: Effect.Effect<
@@ -270,6 +275,7 @@ const make = Effect.gen(function* () {
   ) {
     const current = yield* Ref.get(loaded);
     if (Option.isSome(current)) return current.value;
+    const started = performance.now();
     const model = yield* create.pipe(
       Effect.tapError((error) =>
         error._tag === "VoiceEngineError" ? Effect.void : Ref.set(lastError, Option.some(error)),
@@ -277,10 +283,12 @@ const make = Effect.gen(function* () {
     );
     yield* Ref.set(loaded, Option.some(model));
     yield* Ref.set(lastError, Option.none());
+    yield* recordTiming({ kind: "load", model: kind, ms: Math.round(performance.now() - started) });
     return model;
   });
 
   const loadRecognizer = loadModel(
+    "stt",
     recognizer,
     sttError,
     Effect.gen(function* () {
@@ -295,6 +303,7 @@ const make = Effect.gen(function* () {
   );
 
   const loadTts = loadModel(
+    "tts",
     tts,
     ttsError,
     Effect.gen(function* () {
@@ -360,12 +369,19 @@ const make = Effect.gen(function* () {
           catch: (cause) =>
             new VoiceEngineError({ detail: `Transcription failed: ${errorDetail(cause)}` }),
         });
-        return {
+        const result = {
           rawText,
           text: applyPhraseBook(rawText, settings.phraseBook),
           audioMs: Math.round((samples.length / sampleRate) * 1000),
           decodeMs: Math.round(performance.now() - started),
         } satisfies TranscriptionResult;
+        yield* recordTiming({
+          kind: "transcribe",
+          audioMs: result.audioMs,
+          decodeMs: result.decodeMs,
+          chars: rawText.length,
+        });
+        return result;
       }),
     );
 
@@ -384,10 +400,17 @@ const make = Effect.gen(function* () {
           catch: (cause) =>
             new VoiceEngineError({ detail: `Speech synthesis failed: ${errorDetail(cause)}` }),
         });
+        const synthMs = Math.round(performance.now() - started);
+        yield* recordTiming({
+          kind: "speak",
+          chars: spokenText.length,
+          synthMs,
+          audioMs: Math.round((audio.samples.length / audio.sampleRate) * 1000),
+        });
         return Option.some<SpeechResult>({
           spokenText,
           wav: float32ToWav(audio.samples, audio.sampleRate),
-          synthMs: Math.round(performance.now() - started),
+          synthMs,
         });
       }),
     );
