@@ -28,6 +28,7 @@ import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
 import * as ServerConfig from "./config.ts";
 import { withUntracedRequests } from "./http.ts";
 import * as ServerHttp from "./http.ts";
+import * as VoiceHttp from "./voice/http.ts";
 import {
   guardHttpResponseWriteErrors,
   rejectRequestsUntilServing,
@@ -720,6 +721,7 @@ const layerMakeRoutes = Layer.mergeAll(
     GuestHttp.layer,
     DeviceHubProxy.layer,
     ServerBrowserStream.routeLayer,
+    VoiceHttp.layer,
     ServerHttp.layerStaticAndDevRoute,
     Ws.layer,
   ),

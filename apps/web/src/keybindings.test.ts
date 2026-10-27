@@ -239,6 +239,24 @@ describe("thread undo shortcut", () => {
   });
 });
 
+describe("voice input shortcut", () => {
+  // regression: macOS 27 took Cmd+Shift+Space for Visual Intelligence, so the old default
+  // never reached the app.
+  it("starts dictation on Cmd+' and stays out of the terminal", () => {
+    const input = event({ key: "'", code: "Quote", metaKey: true });
+    assert.strictEqual(
+      resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, { platform: "MacIntel" }),
+      "composer.voiceInput",
+    );
+    assert.isNull(
+      resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform: "MacIntel",
+        context: { terminalFocus: true },
+      }),
+    );
+  });
+});
+
 describe("split/new/close terminal shortcuts", () => {
   it("supports when expressions", () => {
     const keybindings = compile([

@@ -31,7 +31,8 @@
 ## Working on T3 Code
 
 Start with the [development runbook](./operations/development.md) and
-[contribution policy](../CONTRIBUTING.md).
+[contribution policy](../CONTRIBUTING.md). Decisions specific to this fork are recorded as
+[architecture decision records](./adr/README.md).
 
 Internal notes preserve architectural decisions, constraints, and implementation traps that the
 source alone does not explain. Most code changes do not need an internal documentation update. Follow the
