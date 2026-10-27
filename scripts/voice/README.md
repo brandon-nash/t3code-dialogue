@@ -62,3 +62,16 @@ that owns the thread, so a remote thread uses the remote machine's models.
 
 Setup problems return 503 as `VoiceUnavailableError` with a `detail`; the composer shows it in the
 button tooltip.
+
+## Timings
+
+Every model load, transcription, and synthesis appends one line to
+`<state dir>/logs/voice-timings.ndjson` (`~/.t3/dev/logs` for a plain-clone dev server,
+`<worktree>/.t3/logs` for a worktree, `~/.t3/userdata/logs` for the installed app). Summarize it with
+
+```sh
+node scripts/voice/summarize-timings.ts ~/.t3/dev/logs/voice-timings.ndjson
+```
+
+Cold loads are reported separately from warm decode. Use the real-time factors to judge whether
+streaming (issues #5 and #6) or a different model is worth it.
