@@ -130,6 +130,7 @@ import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { ComposerVoiceControls } from "./ComposerVoiceControls";
+import type { VoiceDraftAdapter } from "../../voice/useVoiceInput";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
@@ -2553,6 +2554,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       )
     : props.bannerItems;
 
+  const composerAcceptsInsertedText = () =>
+    !isConnecting &&
+    !activePendingIsResponding &&
+    (pendingUserInputs.length === 0 || Boolean(activePendingProgress?.activeQuestion)) &&
+    !projectSelectionRequired;
+
   const insertComposerText = (
     text: string,
     position: "cursor" | "end",
@@ -2564,10 +2571,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   ): boolean => {
     if (
       text.length === 0 ||
-      isConnecting ||
-      activePendingIsResponding ||
-      (pendingUserInputs.length > 0 && !activePendingProgress?.activeQuestion) ||
-      projectSelectionRequired ||
+      !composerAcceptsInsertedText() ||
       (options?.citationCommentAnchor && !composerEditorRef.current)
     ) {
       return false;
@@ -2599,6 +2603,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   };
   const insertComposerTextStable = useStableCallback(insertComposerText);
+
+  // Dictation edits in expanded coordinates, the same ones `insertComposerText` uses.
+  const voiceDraftAdapter: VoiceDraftAdapter = {
+    ownerKey: composerDraftTargetKey,
+    read: () => {
+      const snapshot = readComposerSnapshotStable();
+      return { text: snapshot.value, cursor: snapshot.expandedCursor };
+    },
+    replaceRange: (start, end, insertion, cursorAfter) =>
+      composerAcceptsInsertedText() &&
+      applyPromptReplacementStable(start, end, insertion, {
+        expandedCursorAfterReplace: cursorAfter,
+      }),
+  };
 
   const insertAttachmentReferences = (
     references: ReadonlyArray<ComposerContextReference>,
@@ -3777,9 +3795,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     threadRef={routeThreadRef}
                     latestRun={props.activeThreadShell?.latestRun ?? null}
                     keybindings={keybindings}
-                    onTranscript={(text) =>
-                      insertComposerTextStable(text, "cursor", { ensureLeadingBoundary: true })
-                    }
+                    draft={voiceDraftAdapter}
                   />
                   {composerAttachButton}
                   <ComposerFooterPrimaryActions

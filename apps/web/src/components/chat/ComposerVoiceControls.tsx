@@ -18,7 +18,7 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { registerCommands } from "../../shortcuts/dispatcher";
 import { useSpokenReplies } from "../../voice/useSpokenReplies";
-import { useVoiceInput } from "../../voice/useVoiceInput";
+import { useVoiceInput, type VoiceDraftAdapter } from "../../voice/useVoiceInput";
 import { fetchVoiceStatus, type VoiceAvailability } from "../../voice/voiceApi";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
@@ -46,7 +46,7 @@ export function ComposerVoiceControls(props: {
   readonly threadRef: ScopedThreadRef;
   readonly latestRun: ThreadRunSummary | null;
   readonly keybindings: ResolvedKeybindingsConfig;
-  readonly onTranscript: (text: string) => boolean;
+  readonly draft: VoiceDraftAdapter;
 }) {
   const backgroundThread = use(BackgroundThreadContext);
   const environmentId = props.threadRef.environmentId;
@@ -86,22 +86,18 @@ export function ComposerVoiceControls(props: {
 
   const voiceInput = useVoiceInput({
     environmentId,
-    onTranscript: (text) => {
-      if (!props.onTranscript(text)) {
-        showError("The composer is busy, so the transcript was not inserted.");
-      }
-    },
+    draft: props.draft,
     // Talking over the agent should silence it.
     onRecordingStart: spokenReplies.stop,
     onError: showError,
   });
 
   const pressStart = useStableCallback(() => {
-    const phase = voiceInput.phaseRef.current;
+    const phase = voiceInput.readPhase();
     if (phase === "idle") {
       pressRef.current = { startedRecording: true, at: performance.now() };
       void voiceInput.start();
-    } else if (phase === "recording" || phase === "starting") {
+    } else if (phase === "recording" || phase === "preparing") {
       pressRef.current = { startedRecording: false, at: performance.now() };
       voiceInput.stop();
     }
@@ -195,7 +191,7 @@ export function ComposerVoiceControls(props: {
             />
           }
         >
-          {voiceInput.phase === "transcribing" || voiceInput.phase === "starting" ? (
+          {voiceInput.phase === "transcribing" || voiceInput.phase === "preparing" ? (
             <Spinner />
           ) : (
             <MicIcon />
