@@ -1,4 +1,4 @@
-# Voice spike (Phase 1)
+# Voice mode (Phase 1)
 
 Push-to-talk dictation and spoken replies in the T3 Code composer, running entirely on the
 machine that hosts the T3 server. Speech-to-text is Parakeet TDT 0.6B, text-to-speech is

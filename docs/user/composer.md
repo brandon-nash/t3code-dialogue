@@ -173,6 +173,28 @@ Stashes containing uploaded files must be restored in their original environment
 Those files are retained for 24 hours. After an upload expires, restore the prompt
 and use **Attach again** or remove the missing file before sending.
 
+## Dictation and spoken replies on web and desktop
+
+Voice runs on the machine that hosts your T3 Code server, using local speech
+models. Nothing is sent to a speech service. The controls appear in the composer
+once that machine has the models installed; see
+[scripts/voice/README.md](../../scripts/voice/README.md) for the one-time install.
+
+Use the **microphone** button or `mod+'` to dictate. Tap to start and tap again
+to stop, or hold the button or shortcut and release. **Esc** discards the
+recording. The transcript is inserted at your cursor for you to review and edit
+before sending. Recordings can be up to five minutes long.
+
+Turn on the **speaker** button to hear each completed reply read aloud. Code
+blocks, tables, and links are skipped, and long replies are shortened. An agent
+can choose what is spoken by wrapping a short summary in `<speak>…</speak>`.
+Starting to dictate, muting, or switching threads stops playback. The setting is
+remembered per browser.
+
+A phrase book in the server's `voice.json` expands spoken shortcuts and fixes
+the spelling of names and jargon in every transcript. It also sets the reply
+voice and speed.
+
 ## Voice input on iPhone
 
 On supported iPhones with iOS 26 or later, use the composer's microphone to record,
