@@ -129,6 +129,7 @@ import {
 import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { shortcutLabelForCommand } from "../../keybindings";
+import { ComposerVoiceControls } from "./ComposerVoiceControls";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
@@ -3772,6 +3773,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   }
                   className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
                 >
+                  <ComposerVoiceControls
+                    threadRef={routeThreadRef}
+                    latestRun={props.activeThreadShell?.latestRun ?? null}
+                    keybindings={keybindings}
+                    onTranscript={(text) =>
+                      insertComposerTextStable(text, "cursor", { ensureLeadingBoundary: true })
+                    }
+                  />
                   {composerAttachButton}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}

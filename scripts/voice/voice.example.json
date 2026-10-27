@@ -1,0 +1,27 @@
+{
+  "tts": {
+    "speakerId": 0,
+    "speed": 1.1
+  },
+  "replacements": {
+    "that's metal": "🤘",
+    "ship it": "🚢",
+    "thumbs up": "👍",
+    "new paragraph": "\n\n",
+    "new line": "\n"
+  },
+  "vocabulary": [
+    "Alkami",
+    "Banno",
+    "Q2",
+    "Candescent",
+    "Constellation",
+    "jXchange",
+    "SymXchange",
+    "KeyBridge",
+    "Pulumi",
+    "Trabian",
+    "T3 Code",
+    "Claude Code"
+  ]
+}
