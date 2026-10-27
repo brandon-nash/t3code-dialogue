@@ -211,6 +211,44 @@ export const loadSherpa = Effect.tryPromise({
     }),
 });
 
+export type SpeechRecognizer = Pick<
+  OfflineRecognizer,
+  "createStream" | "decodeAsync" | "getResult"
+>;
+export type SpeechSynthesizer = Pick<OfflineTts, "numSpeakers" | "generateAsync">;
+
+/** The native runtime behind the engine, so tests can stand in models without sherpa. */
+export class VoiceRuntime extends Context.Service<
+  VoiceRuntime,
+  {
+    readonly createRecognizer: (
+      config: unknown,
+    ) => Effect.Effect<SpeechRecognizer, VoiceRuntimeUnavailableError | VoiceEngineError>;
+    readonly createSynthesizer: (
+      config: unknown,
+    ) => Effect.Effect<SpeechSynthesizer, VoiceRuntimeUnavailableError | VoiceEngineError>;
+  }
+>()("t3/voice/voiceEngine/VoiceRuntime") {}
+
+const layerSherpaRuntime = Layer.succeed(VoiceRuntime, {
+  createRecognizer: Effect.fn("VoiceRuntime.createRecognizer")(function* (config: unknown) {
+    const sherpa = yield* loadSherpa;
+    return yield* Effect.tryPromise({
+      try: () => sherpa.OfflineRecognizer.createAsync(config),
+      catch: (cause) =>
+        new VoiceEngineError({ detail: `Parakeet failed to load: ${errorDetail(cause)}` }),
+    });
+  }),
+  createSynthesizer: Effect.fn("VoiceRuntime.createSynthesizer")(function* (config: unknown) {
+    const sherpa = yield* loadSherpa;
+    return yield* Effect.tryPromise({
+      try: () => sherpa.OfflineTts.createAsync(config),
+      catch: (cause) =>
+        new VoiceEngineError({ detail: `Kokoro failed to load: ${errorDetail(cause)}` }),
+    });
+  }),
+});
+
 const componentState = (
   loaded: boolean,
   lastError: Option.Option<VoiceModelsMissingError | VoiceRuntimeUnavailableError>,
@@ -231,6 +269,7 @@ const componentState = (
 
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
+  const runtime = yield* VoiceRuntime;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -250,8 +289,8 @@ const make = Effect.gen(function* () {
       Effect.provideService(Path.Path, path),
     );
 
-  const recognizer = yield* Ref.make(Option.none<OfflineRecognizer>());
-  const tts = yield* Ref.make(Option.none<OfflineTts>());
+  const recognizer = yield* Ref.make(Option.none<SpeechRecognizer>());
+  const tts = yield* Ref.make(Option.none<SpeechSynthesizer>());
   const sttError = yield* Ref.make(
     Option.none<VoiceModelsMissingError | VoiceRuntimeUnavailableError>(),
   );
@@ -261,8 +300,10 @@ const make = Effect.gen(function* () {
   const settingsCache = yield* Ref.make(
     Option.none<{ readonly mtimeMs: number; readonly settings: VoiceSettings }>(),
   );
-  // One permit: loads are single-flight, and one utterance decodes at a time.
-  const lock = yield* Semaphore.make(1);
+  // One permit each: loads are single-flight and one utterance decodes at a time per model,
+  // while a long reply being synthesized never holds up dictation.
+  const sttLock = yield* Semaphore.make(1);
+  const ttsLock = yield* Semaphore.make(1);
 
   const loadModel = Effect.fn("voice.loadModel")(function* <M>(
     kind: "stt" | "tts",
@@ -293,12 +334,7 @@ const make = Effect.gen(function* () {
     sttError,
     Effect.gen(function* () {
       const modelConfig = yield* withServices(resolveParakeetConfig(parakeetDir));
-      const sherpa = yield* loadSherpa;
-      return yield* Effect.tryPromise({
-        try: () => sherpa.OfflineRecognizer.createAsync(modelConfig),
-        catch: (cause) =>
-          new VoiceEngineError({ detail: `Parakeet failed to load: ${errorDetail(cause)}` }),
-      });
+      return yield* runtime.createRecognizer(modelConfig);
     }),
   );
 
@@ -308,12 +344,7 @@ const make = Effect.gen(function* () {
     ttsError,
     Effect.gen(function* () {
       const modelConfig = yield* withServices(resolveKokoroConfig(kokoroDir));
-      const sherpa = yield* loadSherpa;
-      return yield* Effect.tryPromise({
-        try: () => sherpa.OfflineTts.createAsync(modelConfig),
-        catch: (cause) =>
-          new VoiceEngineError({ detail: `Kokoro failed to load: ${errorDetail(cause)}` }),
-      });
+      return yield* runtime.createSynthesizer(modelConfig);
     }),
   );
 
@@ -354,7 +385,7 @@ const make = Effect.gen(function* () {
   });
 
   const transcribe = (samples: Float32Array, sampleRate: number) =>
-    lock.withPermits(1)(
+    sttLock.withPermits(1)(
       Effect.gen(function* () {
         const model = yield* loadRecognizer;
         const settings = yield* loadSettings;
@@ -386,7 +417,7 @@ const make = Effect.gen(function* () {
     );
 
   const speak = (markdown: string) =>
-    lock.withPermits(1)(
+    ttsLock.withPermits(1)(
       Effect.gen(function* () {
         const spokenText = toSpeakableText(markdown);
         if (spokenText.length === 0) return Option.none<SpeechResult>();
@@ -418,4 +449,7 @@ const make = Effect.gen(function* () {
   return { voiceDir, status, transcribe, speak } satisfies VoiceEngine["Service"];
 });
 
-export const layer = Layer.effect(VoiceEngine, make);
+/** The engine over whatever runtime is provided; tests supply a fake. */
+export const layerEngine = Layer.effect(VoiceEngine, make);
+
+export const layer = layerEngine.pipe(Layer.provide(layerSherpaRuntime));
