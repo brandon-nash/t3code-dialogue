@@ -27,7 +27,7 @@ sherpa-onnx's GitHub releases (`asr-models`, `tts-models`).
 
 ## Using it
 
-- **Mic button** (left of the attach button) or **Cmd+Shift+Space**: tap to start, tap again
+- **Mic button** (left of the attach button) or **Cmd+'**: tap to start, tap again
   to stop, or hold and release. **Esc** discards the recording. The transcript lands at the
   caret. Rebind via `composer.voiceInput` in keybindings.json.
 - **Speaker button**: reads each completed reply aloud. Code blocks, tables, and URLs are
