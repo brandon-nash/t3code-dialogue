@@ -27,7 +27,7 @@ export type VoiceAvailability =
   | { readonly kind: "absent" }
   | { readonly kind: "present"; readonly status: VoiceStatus };
 
-export class VoiceRequestError extends Error {
+class VoiceRequestError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "VoiceRequestError";
