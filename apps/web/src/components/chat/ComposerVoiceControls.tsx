@@ -2,7 +2,12 @@
  * Mic (tap to toggle, hold to talk, Esc discards) and a speaker toggle for spoken replies.
  * Both use the server's local models; the controls hide on servers without voice routes.
  */
-import type { ResolvedKeybindingsConfig, ScopedThreadRef } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ResolvedKeybindingsConfig,
+  ScopedThreadRef,
+  VoiceStatus,
+} from "@t3tools/contracts";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
 import * as Schema from "effect/Schema";
 import { MicIcon, Volume2Icon, VolumeXIcon } from "lucide-react";
@@ -14,7 +19,7 @@ import { shortcutLabelForCommand } from "../../keybindings";
 import { registerCommands } from "../../shortcuts/dispatcher";
 import { useSpokenReplies } from "../../voice/useSpokenReplies";
 import { useVoiceInput } from "../../voice/useVoiceInput";
-import { fetchVoiceStatus, type VoiceStatus } from "../../voice/voiceApi";
+import { fetchVoiceStatus, type VoiceAvailability } from "../../voice/voiceApi";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
@@ -24,10 +29,12 @@ import { BackgroundThreadContext } from "./backgroundThread";
 // A press shorter than this is a tap (toggle); longer is hold-to-talk.
 const HOLD_THRESHOLD_MS = 350;
 
-type VoiceAvailability =
-  | { readonly kind: "checking" }
-  | { readonly kind: "absent" }
-  | { readonly kind: "present"; readonly status: VoiceStatus };
+interface VoiceProbe {
+  readonly environmentId: EnvironmentId;
+  readonly availability: VoiceAvailability;
+}
+
+const CHECKING = { kind: "checking" } as const;
 
 function componentHint(component: VoiceStatus["stt"]): string | null {
   return component.state === "missing_models" || component.state === "unavailable"
@@ -42,7 +49,11 @@ export function ComposerVoiceControls(props: {
   readonly onTranscript: (text: string) => boolean;
 }) {
   const backgroundThread = use(BackgroundThreadContext);
-  const [availability, setAvailability] = useState<VoiceAvailability>({ kind: "checking" });
+  const environmentId = props.threadRef.environmentId;
+  const [probe, setProbe] = useState<VoiceProbe | null>(null);
+  // A probe for another environment is stale, so the controls wait for this one's answer.
+  const availability: VoiceAvailability | typeof CHECKING =
+    probe?.environmentId === environmentId ? probe.availability : CHECKING;
   const [repliesEnabled, setRepliesEnabled] = useLocalStorage(
     "t3code.voiceRepliesEnabled",
     false,
@@ -54,17 +65,17 @@ export function ComposerVoiceControls(props: {
     toastManager.add({ type: "error", title: "Voice", description: message });
   };
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Probe the connected server once; older or remote servers have no voice routes.
+  // oxlint-disable-next-line t3code/react-effect-budget -- Probe the thread's environment; older servers and read-only sessions have no voice.
   useEffect(() => {
-    const controller = new AbortController();
-    fetchVoiceStatus(controller.signal).then(
-      (status) => setAvailability({ kind: "present", status }),
-      () => {
-        if (!controller.signal.aborted) setAvailability({ kind: "absent" });
-      },
-    );
-    return () => controller.abort();
-  }, []);
+    let cancelled = false;
+    const settle = (availability: VoiceAvailability) => {
+      if (!cancelled) setProbe({ environmentId, availability });
+    };
+    fetchVoiceStatus(environmentId).then(settle, () => settle({ kind: "absent" }));
+    return () => {
+      cancelled = true;
+    };
+  }, [environmentId]);
 
   const spokenReplies = useSpokenReplies({
     threadRef: props.threadRef,
@@ -74,6 +85,7 @@ export function ComposerVoiceControls(props: {
   });
 
   const voiceInput = useVoiceInput({
+    environmentId,
     onTranscript: (text) => {
       if (!props.onTranscript(text)) {
         showError("The composer is busy, so the transcript was not inserted.");

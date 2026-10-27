@@ -81,7 +81,7 @@ export function useSpokenReplies(options: {
     try {
       const text = await readFinalReply(threadRef, run, playback.abort.signal);
       if (!text || playback.abort.signal.aborted) return;
-      const wav = await synthesizeReply(text, playback.abort.signal);
+      const wav = await synthesizeReply(threadRef.environmentId, text);
       if (!wav || playback.abort.signal.aborted) return;
       playback.url = URL.createObjectURL(wav);
       playback.audio = new Audio(playback.url);

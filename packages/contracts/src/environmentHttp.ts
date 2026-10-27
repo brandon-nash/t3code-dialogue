@@ -65,6 +65,14 @@ import {
   PullRequestUnavailableError,
 } from "./pullRequest.ts";
 import {
+  VOICE_SYNTH_MS_HEADER,
+  VoiceFailedError,
+  VoiceSpeakRequest,
+  VoiceStatus,
+  VoiceTranscription,
+  VoiceUnavailableError,
+} from "./voice.ts";
+import {
   RelayCloudEnvironmentHealthRequest,
   RelayCloudMintCredentialRequest,
   RelayEnvironmentConfigRequest,
@@ -95,6 +103,7 @@ export const EnvironmentRequestInvalidReason = Schema.Literals([
   "invalid_command",
   "invalid_history_cursor",
   "thread_transcript_too_large",
+  "payload_too_large",
 ]);
 export type EnvironmentRequestInvalidReason = typeof EnvironmentRequestInvalidReason.Type;
 
@@ -768,6 +777,49 @@ class EnvironmentPullRequestsHttpApi extends HttpApiGroup.make("pullRequests").a
   }).middleware(EnvironmentAuthenticatedAuth),
 ) {}
 
+const VoiceRouteErrors = [
+  VoiceUnavailableError,
+  VoiceFailedError,
+  EnvironmentRequestInvalidError,
+  EnvironmentAuthInvalidError,
+  EnvironmentScopeRequiredError,
+  EnvironmentInternalError,
+] as const;
+
+// Audio bodies are binary; the speak response is WAV with its synthesis time in a header.
+const VoicePcmPayload = Schema.Uint8Array.pipe(
+  HttpApiSchema.asUint8Array({ contentType: "application/octet-stream" }),
+);
+const VoiceWavResponse = HttpApiSchema.WithHeaders(
+  Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array({ contentType: "audio/wav" })),
+  { [VOICE_SYNTH_MS_HEADER]: Schema.FiniteFromString },
+);
+
+class EnvironmentVoiceHttpApi extends HttpApiGroup.make("voice")
+  .add(
+    HttpApiEndpoint.get("status", "/api/voice/status", {
+      headers: OptionalBearerHeaders,
+      success: VoiceStatus,
+      error: VoiceRouteErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("transcribe", "/api/voice/transcribe", {
+      headers: OptionalBearerHeaders,
+      payload: VoicePcmPayload,
+      success: VoiceTranscription,
+      error: VoiceRouteErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("speak", "/api/voice/speak", {
+      headers: OptionalBearerHeaders,
+      payload: VoiceSpeakRequest,
+      success: VoiceWavResponse,
+      error: VoiceRouteErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  ) {}
+
 class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
   .add(
     HttpApiEndpoint.post("linkProof", "/api/connect/link-proof", {
@@ -862,6 +914,7 @@ export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMcpOAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
   .add(EnvironmentPullRequestsHttpApi)
+  .add(EnvironmentVoiceHttpApi)
   .add(EnvironmentProjectsHttpApi)
   .add(EnvironmentConnectHttpApi)
   .add(EnvironmentWebhooksHttpApi) {}
