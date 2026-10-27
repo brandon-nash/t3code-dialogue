@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -119,6 +120,65 @@ it.layer(
       const engine = yield* VoiceEngine.VoiceEngine;
       const speech = yield* engine.speak("```ts\nconst x = 1;\n```");
       expect(speech._tag).toBe("None");
+    }),
+  );
+});
+
+const PARAKEET_FILES = ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"];
+const KOKORO_FILES = ["model.onnx", "voices.bin", "tokens.txt"];
+
+describe("VoiceEngine with a fake runtime", () => {
+  it.effect("transcribes while a reply is still being synthesized", () =>
+    Effect.gen(function* () {
+      let synthesisStarted!: () => void;
+      let releaseSynthesis!: () => void;
+      const started = new Promise<void>((resolve) => {
+        synthesisStarted = resolve;
+      });
+      const gate = new Promise<void>((resolve) => {
+        releaseSynthesis = resolve;
+      });
+      const runtime = VoiceEngine.VoiceRuntime.of({
+        createRecognizer: () =>
+          Effect.succeed({
+            createStream: () => ({ acceptWaveform: () => {} }),
+            decodeAsync: () => Promise.resolve(),
+            getResult: () => ({ text: "ship it." }),
+          }),
+        createSynthesizer: () =>
+          Effect.succeed({
+            numSpeakers: 1,
+            generateAsync: async () => {
+              synthesisStarted();
+              await gate;
+              return { samples: new Float32Array(24_000), sampleRate: 24_000 };
+            },
+          }),
+      });
+      const layer = VoiceEngine.layerEngine.pipe(
+        Layer.provide(Layer.succeed(VoiceEngine.VoiceRuntime, runtime)),
+        Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-voice-engine-" })),
+        Layer.provideMerge(NodeServices.layer),
+      );
+
+      yield* Effect.gen(function* () {
+        const config = yield* ServerConfig.ServerConfig;
+        const path = yield* Path.Path;
+        const models = path.join(config.baseDir, "voice", "models");
+        yield* touch(path.join(models, "parakeet"), PARAKEET_FILES);
+        yield* touch(path.join(models, "kokoro"), KOKORO_FILES);
+        const engine = yield* VoiceEngine.VoiceEngine;
+
+        const speaking = yield* Effect.forkChild(engine.speak("All tests pass."));
+        yield* Effect.promise(() => started);
+
+        const transcription = yield* engine.transcribe(new Float32Array(16_000), 16_000);
+        expect(transcription.rawText).toBe("ship it.");
+
+        releaseSynthesis();
+        const speech = yield* Fiber.join(speaking);
+        expect(speech._tag).toBe("Some");
+      }).pipe(Effect.provide(layer));
     }),
   );
 });
