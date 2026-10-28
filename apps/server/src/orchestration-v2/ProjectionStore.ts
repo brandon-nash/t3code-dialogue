@@ -433,6 +433,12 @@ export interface OlderSettledThreadsListing {
   readonly counts: ReadonlyArray<OrchestrationV2OlderSettledCount>;
 }
 
+export interface ProjectionNativeThreadOwner {
+  readonly threadId: ThreadId;
+  readonly providerInstanceId: ProviderInstanceId;
+  readonly deleted: boolean;
+}
+
 export interface ProjectionStoreV2Shape {
   readonly searchThreadStream: (
     input: OrchestrationV2SearchThreadInput,
@@ -505,9 +511,8 @@ export interface ProjectionStoreV2Shape {
   /** App threads whose provider thread holds one of these native session ids. */
   readonly findNativeThreadOwners: (options: {
     readonly driver: ProviderDriverKind;
-    readonly providerInstanceId: ProviderInstanceId;
     readonly nativeIds: ReadonlyArray<string>;
-  }) => Effect.Effect<ReadonlyMap<string, ThreadId>, ProjectionStoreV2Error>;
+  }) => Effect.Effect<ReadonlyMap<string, ProjectionNativeThreadOwner>, ProjectionStoreV2Error>;
   readonly getLimitRecoveryCandidates: (options: {
     readonly now: DateTime.Utc;
     readonly autoResume: boolean;
@@ -6640,20 +6645,29 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const findNativeThreadOwners: ProjectionStoreV2Shape["findNativeThreadOwners"] = Effect.fn(
       "ProjectionStore.findNativeThreadOwners",
-    )(function* ({ driver, providerInstanceId, nativeIds }) {
-      const owners = new Map<string, ThreadId>();
+    )(function* ({ driver, nativeIds }) {
+      const owners = new Map<string, ProjectionNativeThreadOwner>();
       if (nativeIds.length === 0) return owners;
-      const rows = yield* sql<{ readonly thread_id: string | null; readonly native_id: string }>`
-        SELECT thread_id, json_extract(payload_json, '$.nativeThreadRef.nativeId') AS native_id
-        FROM orchestration_v2_projection_provider_threads
-        WHERE driver = ${driver}
-          AND provider_instance_id = ${providerInstanceId}
-          AND thread_id IS NOT NULL
-          AND json_extract(payload_json, '$.nativeThreadRef.nativeId') IN ${sql.in(nativeIds)}
+      const rows = yield* sql<{
+        readonly thread_id: string;
+        readonly provider_instance_id: string;
+        readonly native_id: string;
+        readonly deleted_at: string | null;
+      }>`
+        SELECT p.thread_id, p.provider_instance_id, t.deleted_at,
+          json_extract(p.payload_json, '$.nativeThreadRef.nativeId') AS native_id
+        FROM orchestration_v2_projection_provider_threads p
+        JOIN orchestration_v2_projection_threads t ON t.thread_id = p.thread_id
+        WHERE p.driver = ${driver}
+          AND json_extract(p.payload_json, '$.nativeThreadRef.nativeId') IN ${sql.in(nativeIds)}
       `;
       for (const row of rows) {
-        if (row.thread_id !== null && !owners.has(row.native_id)) {
-          owners.set(row.native_id, ThreadId.make(row.thread_id));
+        if (!owners.has(row.native_id)) {
+          owners.set(row.native_id, {
+            threadId: ThreadId.make(row.thread_id),
+            providerInstanceId: ProviderInstanceId.make(row.provider_instance_id),
+            deleted: row.deleted_at !== null,
+          });
         }
       }
       return owners;
@@ -7015,10 +7029,9 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
       ),
       findNativeThreadOwners: Effect.fn("ProjectionStore.findNativeThreadOwners")(function* ({
         driver,
-        providerInstanceId,
         nativeIds,
       }) {
-        const owners = new Map<string, ThreadId>();
+        const owners = new Map<string, ProjectionNativeThreadOwner>();
         const wanted = new Set(nativeIds);
         const projections = (yield* Ref.get(replayState)).projections;
         for (const { thread, providerThreads } of projections.values()) {
@@ -7026,12 +7039,15 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
             const nativeId = providerThread.nativeThreadRef?.nativeId ?? null;
             if (
               providerThread.driver === driver &&
-              providerThread.providerInstanceId === providerInstanceId &&
               nativeId !== null &&
               wanted.has(nativeId) &&
               !owners.has(nativeId)
             ) {
-              owners.set(nativeId, thread.id);
+              owners.set(nativeId, {
+                threadId: thread.id,
+                providerInstanceId: providerThread.providerInstanceId,
+                deleted: thread.deletedAt !== null,
+              });
             }
           }
         }

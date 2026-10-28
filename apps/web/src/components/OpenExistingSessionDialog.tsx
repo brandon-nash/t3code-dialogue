@@ -202,6 +202,7 @@ function SessionRow({
           size="xs"
           disabled={busy}
           onClick={() => onOpen(session.threadId!)}
+          aria-label={`Open ${title}`}
         >
           Open
         </Button>

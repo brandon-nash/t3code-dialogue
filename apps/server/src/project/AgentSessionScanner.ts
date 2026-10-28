@@ -155,6 +155,8 @@ export class AgentSessionScanner extends Context.Service<
       options?: {
         /** Rescan the provider directories so sessions started since the last scan appear. */
         readonly refresh?: boolean;
+        /** Only these providers count against the transcript budget; others are left out. */
+        readonly sources?: ReadonlyArray<AgentSessionSource>;
       },
     ) => Stream.Stream<AgentSessionRecentThread, AgentSessionScanError>;
   }
@@ -1310,6 +1312,7 @@ export const make = Effect.gen(function* () {
     workspaceRoot: string,
     completedSources: ReadonlyArray<AgentSessionImportSource>,
     refresh: boolean,
+    sources: ReadonlyArray<AgentSessionSource> | undefined,
   ) {
     const root = path.resolve(expandHomePath(workspaceRoot, homeDir));
     const realRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
@@ -1329,6 +1332,7 @@ export const make = Effect.gen(function* () {
       readonly transcript: RawCandidate["transcripts"][number] & { readonly mtimeMs: number };
     }> = [];
     for (const candidate of candidates) {
+      if (sources !== undefined && !sources.includes(candidate.source)) continue;
       const expanded = expandHomePath(candidate.cwd.trim(), homeDir);
       if (!path.isAbsolute(expanded)) continue;
       const resolved = path.resolve(expanded);
@@ -1468,7 +1472,14 @@ export const make = Effect.gen(function* () {
     completedSources = [],
     options,
   ) =>
-    Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources, options?.refresh === true));
+    Stream.unwrap(
+      prepareRecentThreads(
+        workspaceRoot,
+        completedSources,
+        options?.refresh === true,
+        options?.sources,
+      ),
+    );
 
   return AgentSessionScanner.of({ scan, recentThreads });
 });

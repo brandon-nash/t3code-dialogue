@@ -169,6 +169,18 @@ function messageEvents(input: {
   ];
 }
 
+function summarizeThread(thread: AgentSessionScanner.AgentSessionThread): AgentSessionListItem {
+  return {
+    providerInstanceId: thread.providerInstanceId,
+    providerSessionId: thread.providerSessionId,
+    title: thread.title,
+    model: thread.model,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    messageCount: thread.messages.length,
+  };
+}
+
 function importThreadId(source: {
   readonly providerInstanceId: string;
   readonly providerSessionId: string;
@@ -205,42 +217,42 @@ const make = Effect.gen(function* () {
     input: AgentSessionListInput,
   ) {
     const project = yield* requireProject(input.projectId);
-    const outcomes = yield* scanner
-      .recentThreads(project.workspaceRoot, [], { refresh: true })
-      .pipe(Stream.runCollect);
-    const threads = outcomes.flatMap((outcome) =>
-      outcome._tag === "Importable" && outcome.thread.source === "claudeAgent"
-        ? [outcome.thread]
-        : [],
-    );
-    const byInstance = Map.groupBy(threads, (thread) => thread.providerInstanceId);
+    // Summarize while streaming so no transcript's message history outlives its parse.
+    const summaries = yield* scanner
+      .recentThreads(project.workspaceRoot, [], { refresh: true, sources: ["claudeAgent"] })
+      .pipe(
+        Stream.map((outcome) =>
+          outcome._tag === "Importable" ? [summarizeThread(outcome.thread)] : [],
+        ),
+        Stream.flattenIterable,
+        Stream.runCollect,
+      );
+    // Several Claude instances can share one home; the scanner credits its transcripts to one
+    // of them, so ownership is resolved across instances.
+    const owners = yield* projections
+      .findNativeThreadOwners({
+        driver: ProviderDriverKind.make("claudeAgent"),
+        nativeIds: summaries.map((summary) => summary.providerSessionId),
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) => new AgentSessionScanError({ operation: "read-projects", cause }),
+        ),
+      );
     const sessions: Array<AgentSessionListItem> = [];
-    for (const [providerInstanceId, instanceThreads] of byInstance) {
-      const owners = yield* projections
-        .findNativeThreadOwners({
-          driver: ProviderDriverKind.make("claudeAgent"),
-          providerInstanceId,
-          nativeIds: instanceThreads.map((thread) => thread.providerSessionId),
-        })
-        .pipe(
-          Effect.mapError(
-            (cause) => new AgentSessionScanError({ operation: "read-projects", cause }),
-          ),
-        );
-      for (const thread of instanceThreads) {
-        const owner = owners.get(thread.providerSessionId);
-        if (owner !== undefined && owner !== importThreadId(thread)) continue;
-        sessions.push({
-          providerInstanceId,
-          providerSessionId: thread.providerSessionId,
-          title: thread.title,
-          model: thread.model,
-          createdAt: thread.createdAt,
-          updatedAt: thread.updatedAt,
-          messageCount: thread.messages.length,
-          ...(owner === undefined ? {} : { threadId: owner }),
-        });
+    for (const summary of summaries) {
+      const owner = owners.get(summary.providerSessionId);
+      if (owner === undefined) {
+        sessions.push(summary);
+        continue;
       }
+      // A deleted owner still claims the session, so it can be neither opened nor re-imported.
+      if (owner.deleted) continue;
+      const importedId = importThreadId({
+        providerInstanceId: owner.providerInstanceId,
+        providerSessionId: summary.providerSessionId,
+      });
+      if (owner.threadId === importedId) sessions.push({ ...summary, threadId: owner.threadId });
     }
     sessions.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     return { sessions } satisfies AgentSessionListResult;

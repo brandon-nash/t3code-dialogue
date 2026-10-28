@@ -91,11 +91,13 @@ function importId(source: ReturnType<typeof candidate>) {
 const seedOwner = Effect.fn(function* (
   source: ReturnType<typeof candidate>,
   lifecycle: "active" | "archived" | "deleted" = "active",
+  threadId = ThreadId.make(
+    `owner:${source.source.providerInstanceId}:${source.source.providerSessionId}`,
+  ),
 ) {
   const sink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
   const { providerInstanceId, providerSessionId, provider } = source.source;
-  const threadId = ThreadId.make(`owner:${providerInstanceId}:${providerSessionId}`);
   const driver = ProviderDriverKind.make(provider);
   const providerThread: OrchestrationV2ProviderThread = {
     id: ids.derive.providerThread({
@@ -206,7 +208,12 @@ const makeImporter = Effect.fn(function* (
             yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository,
           ),
           Layer.mock(AgentSessionScanner.AgentSessionScanner)({
-            recentThreads: () => Stream.fromIterable(candidates),
+            recentThreads: (_root, _completed, options) =>
+              Stream.fromIterable(
+                options?.sources === undefined
+                  ? candidates
+                  : candidates.filter((entry) => options.sources!.includes(entry.thread.source)),
+              ),
           }),
           Layer.mock(ProjectService.ProjectService)({
             getById: () =>
@@ -442,47 +449,52 @@ it.effect("imports only the requested session and returns its thread without dup
 
 it.effect("lists Claude sessions, marking imported ones and leaving out sessions T3 started", () =>
   Effect.gen(function* () {
-    const imported = candidate(
-      CLAUDE_MODEL_SELECTION,
-      "0f3c2d6e-1b4a-4c8d-9e2f-3a5b7c9d1e2f",
-      "claudeAgent",
-    );
-    const native = candidate(
-      CLAUDE_MODEL_SELECTION,
-      "7a1e9b2c-3d4f-4a5b-8c6d-7e8f9a0b1c2d",
-      "claudeAgent",
-    );
-    const fresh = candidate(
-      CLAUDE_MODEL_SELECTION,
-      "c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f",
-      "claudeAgent",
-    );
+    const claude = (providerSessionId: string) =>
+      candidate(CLAUDE_MODEL_SELECTION, providerSessionId, "claudeAgent");
+    const imported = claude("0f3c2d6e-1b4a-4c8d-9e2f-3a5b7c9d1e2f");
+    const native = claude("7a1e9b2c-3d4f-4a5b-8c6d-7e8f9a0b1c2d");
+    const fresh = claude("c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f");
+    const archived = claude("1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9");
+    const deleted = claude("9e8d7c6b-5a49-4382-9170-f6e5d4c3b2a1");
+    // Another Claude instance sharing the same home started this one; the scanner credits
+    // the transcript to the default instance.
+    const sharedHome = claude("5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d");
     const codex = candidate(CODEX_MODEL_SELECTION, "codex-session");
     yield* seedOwner(native);
-    const importer = yield* makeImporter([imported, native, fresh, codex]);
+    yield* seedOwner(archived, "archived", importId(archived));
+    yield* seedOwner(deleted, "deleted", importId(deleted));
+    yield* seedOwner(
+      candidate(
+        { ...CLAUDE_MODEL_SELECTION, instanceId: ProviderInstanceId.make("claude-other") },
+        sharedHome.source.providerSessionId,
+        "claudeAgent",
+      ),
+    );
+    const importer = yield* makeImporter([
+      imported,
+      native,
+      fresh,
+      archived,
+      deleted,
+      sharedHome,
+      codex,
+    ]);
     yield* importer.runWith([imported.source.providerSessionId]);
 
+    const summary = (source: ReturnType<typeof candidate>) => ({
+      providerInstanceId: CLAUDE_MODEL_SELECTION.instanceId,
+      providerSessionId: source.source.providerSessionId,
+      title: "Imported thread",
+      model: CLAUDE_MODEL_SELECTION.model,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      messageCount: 2,
+    });
     expect(yield* importer.list).toEqual({
       sessions: [
-        {
-          providerInstanceId: CLAUDE_MODEL_SELECTION.instanceId,
-          providerSessionId: imported.source.providerSessionId,
-          title: "Imported thread",
-          model: CLAUDE_MODEL_SELECTION.model,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          messageCount: 2,
-          threadId: importId(imported),
-        },
-        {
-          providerInstanceId: CLAUDE_MODEL_SELECTION.instanceId,
-          providerSessionId: fresh.source.providerSessionId,
-          title: "Imported thread",
-          model: CLAUDE_MODEL_SELECTION.model,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          messageCount: 2,
-        },
+        { ...summary(imported), threadId: importId(imported) },
+        summary(fresh),
+        { ...summary(archived), threadId: importId(archived) },
       ],
     });
   }).pipe(Effect.scoped, Effect.provide(persistence)),
