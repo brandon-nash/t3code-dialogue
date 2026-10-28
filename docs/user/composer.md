@@ -188,8 +188,8 @@ before sending. Recordings can be up to five minutes long.
 Turn on the **speaker** button to hear each completed reply read aloud. Code
 blocks, tables, and links are skipped, and long replies are shortened. An agent
 can choose what is spoken by wrapping a short summary in `<speak>…</speak>`.
-Starting to dictate, muting, or switching threads stops playback. The setting is
-remembered per browser.
+Typing, sending a message, starting to dictate, muting, or switching threads stops
+playback. The setting is remembered per browser.
 
 A phrase book in the server's `voice.json` expands spoken shortcuts and fixes
 the spelling of names and jargon in every transcript. It also sets the reply
