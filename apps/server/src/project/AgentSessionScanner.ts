@@ -152,6 +152,10 @@ export class AgentSessionScanner extends Context.Service<
     readonly recentThreads: (
       workspaceRoot: string,
       completedSources?: ReadonlyArray<AgentSessionImportSource>,
+      options?: {
+        /** Rescan the provider directories so sessions started since the last scan appear. */
+        readonly refresh?: boolean;
+      },
     ) => Stream.Stream<AgentSessionRecentThread, AgentSessionScanError>;
   }
 >()("t3/project/AgentSessionScanner") {}
@@ -1305,6 +1309,7 @@ export const make = Effect.gen(function* () {
   const prepareRecentThreads = Effect.fn("AgentSessionScanner.prepareRecentThreads")(function* (
     workspaceRoot: string,
     completedSources: ReadonlyArray<AgentSessionImportSource>,
+    refresh: boolean,
   ) {
     const root = path.resolve(expandHomePath(workspaceRoot, homeDir));
     const realRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
@@ -1313,7 +1318,10 @@ export const make = Effect.gen(function* () {
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const cutoffMs = nowMs - RECENT_THREAD_WINDOW_MS;
 
-    const candidates = cachedCandidates ?? (yield* collectCandidates()).candidates;
+    const candidates =
+      refresh || cachedCandidates === null
+        ? (yield* collectCandidates()).candidates
+        : cachedCandidates;
     cachedCandidates = candidates;
 
     const eligibleTranscripts: Array<{
@@ -1458,7 +1466,9 @@ export const make = Effect.gen(function* () {
   const recentThreads: AgentSessionScanner["Service"]["recentThreads"] = (
     workspaceRoot,
     completedSources = [],
-  ) => Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources));
+    options,
+  ) =>
+    Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources, options?.refresh === true));
 
   return AgentSessionScanner.of({ scan, recentThreads });
 });

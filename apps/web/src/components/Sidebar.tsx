@@ -113,7 +113,8 @@ import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
+import { openExistingSessionPicker } from "./OpenExistingSessionDialog";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -2687,6 +2688,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     openCommandPalette({ open: "new-thread-in" });
   };
 
+  const existingSessionProjectRef = resolveThreadActionProjectRef({
+    activeDraftThread: newThreadContext.activeDraftThread,
+    activeThread: newThreadContext.activeThread ?? undefined,
+    defaultProjectRef: newThreadContext.defaultProjectRef,
+    handleNewThread,
+  });
+  const handleOpenExistingSessionClick = () => {
+    if (existingSessionProjectRef === null) return;
+    if (isMobile) setOpenMobile(false);
+    openExistingSessionPicker(existingSessionProjectRef);
+  };
+
   const newThreadShortcutLabel =
     shortcutLabelForCommand(keybindings, "chat.new") ??
     (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
@@ -2829,6 +2842,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onNewProject={openAddProjectCommandPalette}
               onNewThread={handleNewThreadClick}
               newThreadDisabled={projects.length === 0}
+              onOpenExistingSession={handleOpenExistingSessionClick}
+              openExistingSessionDisabled={existingSessionProjectRef === null}
               newThreadShortcutLabel={newThreadShortcutLabel}
               newThreadInProjectShortcutLabel={newThreadInProjectShortcutLabel}
               showNewThreadInProjectHint={projectGroups.length > 1}

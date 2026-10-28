@@ -163,6 +163,25 @@ describe("command permissions", () => {
         }),
       ),
   );
+  it.effect("requires the destination operate grant to import an agent session", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const importSession = createCommandPermissions(runtime, WS_METHODS.agentSessionsImport);
+        registry.set(sessions(env), AsyncResult.success(grant(false)));
+        expect(registry.get(importSession.permissionAtom(env))).toBe(false);
+        expect((yield* importSession.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(importSession.permissionAtom(env))).toBe(true);
+        yield* importSession.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(registry.get(importSession.permissionAtom(other))).toBe(false);
+      }),
+    ),
+  );
+
   it("rechecks permission after waiting in a serial command lane", async () => {
     const registry = AtomRegistry.make();
     const unmount = registry.mount(sessions(env));

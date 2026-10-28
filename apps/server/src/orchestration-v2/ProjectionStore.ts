@@ -73,6 +73,7 @@ import {
   TurnItemId,
   NodeId,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import {
@@ -501,6 +502,12 @@ export interface ProjectionStoreV2Shape {
   readonly getThread: (
     threadId: ThreadId,
   ) => Effect.Effect<OrchestrationV2AppThread, ProjectionStoreV2Error>;
+  /** App threads whose provider thread holds one of these native session ids. */
+  readonly findNativeThreadOwners: (options: {
+    readonly driver: ProviderDriverKind;
+    readonly providerInstanceId: ProviderInstanceId;
+    readonly nativeIds: ReadonlyArray<string>;
+  }) => Effect.Effect<ReadonlyMap<string, ThreadId>, ProjectionStoreV2Error>;
   readonly getLimitRecoveryCandidates: (options: {
     readonly now: DateTime.Utc;
     readonly autoResume: boolean;
@@ -6631,6 +6638,27 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       return rows[0] === undefined ? null : ThreadId.make(rows[0].thread_id);
     }, Effect.mapError(shellSnapshotReadError));
 
+    const findNativeThreadOwners: ProjectionStoreV2Shape["findNativeThreadOwners"] = Effect.fn(
+      "ProjectionStore.findNativeThreadOwners",
+    )(function* ({ driver, providerInstanceId, nativeIds }) {
+      const owners = new Map<string, ThreadId>();
+      if (nativeIds.length === 0) return owners;
+      const rows = yield* sql<{ readonly thread_id: string | null; readonly native_id: string }>`
+        SELECT thread_id, json_extract(payload_json, '$.nativeThreadRef.nativeId') AS native_id
+        FROM orchestration_v2_projection_provider_threads
+        WHERE driver = ${driver}
+          AND provider_instance_id = ${providerInstanceId}
+          AND thread_id IS NOT NULL
+          AND json_extract(payload_json, '$.nativeThreadRef.nativeId') IN ${sql.in(nativeIds)}
+      `;
+      for (const row of rows) {
+        if (row.thread_id !== null && !owners.has(row.native_id)) {
+          owners.set(row.native_id, ThreadId.make(row.thread_id));
+        }
+      }
+      return owners;
+    }, Effect.mapError(shellSnapshotReadError));
+
     const listOlderSettledThreads: ProjectionStoreV2Shape["listOlderSettledThreads"] = Effect.fn(
       "ProjectionStore.listOlderSettledThreads",
     )(function* ({ before, projectIds, limit }) {
@@ -6777,6 +6805,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       listOlderSettledThreads: readOnReader(listOlderSettledThreads),
       getThreadShell: readOnReader(getThreadShell),
       findGuestShareThreadId: readOnReader(findGuestShareThreadId),
+      findNativeThreadOwners: readOnReader(findNativeThreadOwners),
       getThread: readOnReader(getThread),
       getSettlementCandidates: readOnReader(getSettlementCandidates),
       getThreadsWithPullRequests: readOnReader(getThreadsWithPullRequests),
@@ -6984,6 +7013,30 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
           return null;
         },
       ),
+      findNativeThreadOwners: Effect.fn("ProjectionStore.findNativeThreadOwners")(function* ({
+        driver,
+        providerInstanceId,
+        nativeIds,
+      }) {
+        const owners = new Map<string, ThreadId>();
+        const wanted = new Set(nativeIds);
+        const projections = (yield* Ref.get(replayState)).projections;
+        for (const { thread, providerThreads } of projections.values()) {
+          for (const providerThread of providerThreads) {
+            const nativeId = providerThread.nativeThreadRef?.nativeId ?? null;
+            if (
+              providerThread.driver === driver &&
+              providerThread.providerInstanceId === providerInstanceId &&
+              nativeId !== null &&
+              wanted.has(nativeId) &&
+              !owners.has(nativeId)
+            ) {
+              owners.set(nativeId, thread.id);
+            }
+          }
+        }
+        return owners;
+      }),
       getThread: Effect.fn("ProjectionStore.getThread")(function* (threadId) {
         const projection = (yield* Ref.get(replayState)).projections.get(threadId);
         if (projection === undefined) {
