@@ -96,3 +96,18 @@ export function resolveSpokenReplyText(
     text: pickSpokenReply(projection.messages, runId, assistantMessageId)?.text ?? null,
   };
 }
+
+const MODIFIER_KEYS: ReadonlySet<string> = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock"]);
+
+/**
+ * A key the user presses to start answering. Bare modifiers, Tab, and Cmd/Ctrl chords are
+ * navigation or shortcuts, not an answer, so they leave the reply playing.
+ */
+export function isInterruptingKey(event: {
+  readonly key: string;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+}): boolean {
+  if (event.metaKey || event.ctrlKey) return false;
+  return event.key !== "Tab" && !MODIFIER_KEYS.has(event.key);
+}
