@@ -1,7 +1,7 @@
 import type { MessageId, RunId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createSpokenRunTracker, pickSpokenReply } from "./spokenReplies.logic";
+import { createSpokenRunTracker, isInterruptingKey, pickSpokenReply } from "./spokenReplies.logic";
 
 const run = (id: string) => id as RunId;
 const message = (id: string) => id as MessageId;
@@ -76,5 +76,29 @@ describe("pickSpokenReply", () => {
 
   it("returns null when the run has no assistant reply", () => {
     expect(pickSpokenReply(messages, run("r9"), null)).toBeNull();
+  });
+});
+
+describe("isInterruptingKey", () => {
+  const key = (key: string, mods: { metaKey?: boolean; ctrlKey?: boolean } = {}) => ({
+    key,
+    metaKey: mods.metaKey ?? false,
+    ctrlKey: mods.ctrlKey ?? false,
+  });
+
+  it("treats typing, Enter, Backspace, and Escape as an answer", () => {
+    expect(isInterruptingKey(key("a"))).toBe(true);
+    expect(isInterruptingKey(key(" "))).toBe(true);
+    expect(isInterruptingKey(key("Enter"))).toBe(true);
+    expect(isInterruptingKey(key("Backspace"))).toBe(true);
+    expect(isInterruptingKey(key("Escape"))).toBe(true);
+  });
+
+  it("lets bare modifiers, Tab, and shortcut chords leave the reply playing", () => {
+    expect(isInterruptingKey(key("Shift"))).toBe(false);
+    expect(isInterruptingKey(key("Meta"))).toBe(false);
+    expect(isInterruptingKey(key("Tab"))).toBe(false);
+    expect(isInterruptingKey(key("k", { metaKey: true }))).toBe(false);
+    expect(isInterruptingKey(key("Enter", { ctrlKey: true }))).toBe(false);
   });
 });

@@ -11,7 +11,7 @@ import type {
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
 import * as Schema from "effect/Schema";
 import { MicIcon, Volume2Icon, VolumeXIcon } from "lucide-react";
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -36,20 +36,32 @@ interface VoiceProbe {
 
 const CHECKING = { kind: "checking" } as const;
 
+export interface ComposerVoiceControlsHandle {
+  /** Silences the spoken reply; the composer calls it when the user starts answering. */
+  readonly interrupt: () => void;
+}
+
 function componentHint(component: VoiceStatus["stt"]): string | null {
   return component.state === "missing_models" || component.state === "unavailable"
     ? component.detail
     : null;
 }
 
-export function ComposerVoiceControls(props: {
+export function ComposerVoiceControls({
+  ref,
+  threadRef,
+  latestRun,
+  keybindings,
+  draft,
+}: {
   readonly threadRef: ScopedThreadRef;
   readonly latestRun: ThreadRunSummary | null;
   readonly keybindings: ResolvedKeybindingsConfig;
   readonly draft: VoiceDraftAdapter;
+  readonly ref?: Ref<ComposerVoiceControlsHandle>;
 }) {
   const backgroundThread = use(BackgroundThreadContext);
-  const environmentId = props.threadRef.environmentId;
+  const environmentId = threadRef.environmentId;
   const [probe, setProbe] = useState<VoiceProbe | null>(null);
   // A probe for another environment is stale, so the controls wait for this one's answer.
   const availability: VoiceAvailability | typeof CHECKING =
@@ -78,15 +90,17 @@ export function ComposerVoiceControls(props: {
   }, [environmentId]);
 
   const spokenReplies = useSpokenReplies({
-    threadRef: props.threadRef,
-    latestRun: props.latestRun,
+    threadRef,
+    latestRun,
     enabled: repliesEnabled && !backgroundThread && availability.kind === "present",
     onError: showError,
   });
 
+  useImperativeHandle(ref, () => ({ interrupt: spokenReplies.stop }), [spokenReplies.stop]);
+
   const voiceInput = useVoiceInput({
     environmentId,
-    draft: props.draft,
+    draft,
     // Talking over the agent should silence it.
     onRecordingStart: spokenReplies.stop,
     onError: showError,
@@ -132,7 +146,7 @@ export function ComposerVoiceControls(props: {
 
   const sttHint = componentHint(availability.status.stt);
   const ttsHint = componentHint(availability.status.tts);
-  const shortcut = shortcutLabelForCommand(props.keybindings, "composer.voiceInput");
+  const shortcut = shortcutLabelForCommand(keybindings, "composer.voiceInput");
   const micLabel =
     sttHint ??
     (voiceInput.phase === "recording"
