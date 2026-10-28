@@ -1,6 +1,7 @@
 import type {
   MessageId,
   OrchestrationV2ConversationMessage,
+  OrchestrationV2Run,
   OrchestrationV2RunStatus,
   RunId,
 } from "@t3tools/contracts";
@@ -52,7 +53,7 @@ type ReplyMessage = Pick<
  * it, otherwise the last assistant message of the run. Earlier assistant messages in a run are
  * usually narration ("Let me look at the tests") rather than the answer.
  */
-export function pickSpokenReply(
+function pickSpokenReply(
   messages: ReadonlyArray<ReplyMessage>,
   runId: RunId,
   assistantMessageId: MessageId | null,
@@ -66,4 +67,32 @@ export function pickSpokenReply(
     if (message?.role === "assistant" && message.runId === runId) return message;
   }
   return null;
+}
+
+interface ReplyProjection {
+  readonly runs: ReadonlyArray<Pick<OrchestrationV2Run, "id" | "status">>;
+  readonly messages: ReadonlyArray<ReplyMessage>;
+}
+
+export type SpokenReplyText =
+  | { readonly settled: false }
+  | { readonly settled: true; readonly text: string | null };
+
+/**
+ * The run summary comes from the thread shell stream and the transcript from the thread
+ * detail stream, so the shell can say "completed" while the detail still holds a streaming
+ * message. The detail's own run row shares one ordered stream with its messages: once that
+ * row is terminal, every message update for the run has already been applied.
+ */
+export function resolveSpokenReplyText(
+  projection: ReplyProjection,
+  runId: RunId,
+  assistantMessageId: MessageId | null,
+): SpokenReplyText {
+  const run = projection.runs.find((candidate) => candidate.id === runId);
+  if (!run || !TERMINAL_RUN_STATUSES.has(run.status)) return { settled: false };
+  return {
+    settled: true,
+    text: pickSpokenReply(projection.messages, runId, assistantMessageId)?.text ?? null,
+  };
 }
