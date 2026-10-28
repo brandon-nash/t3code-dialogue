@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./speakBlock": {
+      "types": "./src/speakBlock.ts",
+      "import": "./src/speakBlock.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"

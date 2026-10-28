@@ -1,5 +1,6 @@
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
+import { spokenReplyTurnText } from "@t3tools/provider-core/server/spokenReplyInstructions";
 import {
   CommandId,
   latestProviderTurnForAttempt,
@@ -1092,10 +1093,13 @@ export const layer: Layer.Layer<
       const routableSubagents = projection.subagents.filter((subagent) =>
         RunExecutionService.canRouteRelatedSubagent(subagent.status),
       );
-      const userText = projectComposerContextForProvider({
-        text: message.text,
-        records: message.context?.records ?? [],
-      });
+      const userText = spokenReplyTurnText(
+        message,
+        projectComposerContextForProvider({
+          text: message.text,
+          records: message.context?.records ?? [],
+        }),
+      );
       // Codex and Claude parse /goal from the prompt, so it goes verbatim and history waits a turn.
       const goalDriver = session.driver === "codex" || session.driver === "claudeAgent";
       const goalCommand = goalDriver && parseGoalCommand(message) !== null;

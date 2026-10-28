@@ -33,6 +33,7 @@ Check that the case builds with `--dry-run --case <id>`. Then run it on the text
 
 - `packages/provider-core/src/server/runtimeInstructions.ts`
 - `packages/provider-core/src/server/orchestrationInstructions.ts`
+- `packages/provider-core/src/server/spokenReplyInstructions.ts` (cases set `setup.spokenReply`)
 - `apps/server/src/provider/CodexDeveloperInstructions.ts`
 - `apps/server/src/mcp/toolkits/*/tools.ts` (tool descriptions)
 - `packages/contracts/src/*Mcp.ts` (parameter descriptions and result text)

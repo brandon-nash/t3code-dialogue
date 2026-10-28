@@ -185,9 +185,11 @@ to stop, or hold the button or shortcut and release. **Esc** discards the
 recording. The transcript is inserted at your cursor for you to review and edit
 before sending. Recordings can be up to five minutes long.
 
-Turn on the **speaker** button to hear each completed reply read aloud. Code
-blocks, tables, and links are skipped, and long replies are shortened. An agent
-can choose what is spoken by wrapping a short summary in `<speak>…</speak>`.
+Turn on the **speaker** button to hear each completed reply read aloud. While it
+is on, each message you send asks the agent to end its reply with a one or two
+sentence spoken summary. You hear that summary; the written reply hides it. A
+reply without one is read in reduced form: code blocks, tables, and links are
+skipped, and long replies are shortened.
 Starting to dictate, muting, or switching threads stops playback. The setting is
 remembered per browser.
 

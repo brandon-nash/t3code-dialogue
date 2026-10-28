@@ -1202,6 +1202,11 @@ export const OrchestrationV2ConversationMessage = Schema.Struct({
    * the workflow's opening instead and keep the script behind a disclosure.
    */
   workflowScript: Schema.optional(Schema.Boolean),
+  /**
+   * The sender will hear the reply read aloud, so the provider's copy of this message asks for
+   * a `<speak>` summary. The stored `text` stays what the user wrote.
+   */
+  spokenReply: Schema.optional(Schema.Boolean),
   id: MessageId,
   threadId: ThreadId,
   runId: Schema.NullOr(RunId),
@@ -3002,6 +3007,7 @@ export const OrchestrationV2Command = Schema.Union([
     messageId: MessageId,
     text: Schema.String,
     context: Schema.optional(OrchestrationMessageContext),
+    spokenReply: Schema.optional(Schema.Boolean),
     attachments: Schema.Array(ChatAttachment),
     titleSeed: Schema.optional(TrimmedNonEmptyString),
     modelSelection: Schema.optional(ModelSelection),
