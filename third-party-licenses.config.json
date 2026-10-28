@@ -321,7 +321,9 @@
       "version": "0.4.0",
       "license": "Apache-2.0 AND OFL-1.1",
       "generatedNotices": [
-        { "licenseId": "Apache-2.0" },
+        {
+          "licenseId": "Apache-2.0"
+        },
         {
           "licenseId": "OFL-1.1",
           "copyrights": [
@@ -868,6 +870,24 @@
       "name": "iobuffer",
       "license": "MIT",
       "sourceUrl": "https://github.com/image-js/iobuffer"
+    },
+    {
+      "name": "sherpa-onnx-node",
+      "version": "1.13.8",
+      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
+      "generatedNotice": {
+        "licenseId": "Apache-2.0",
+        "copyrights": ["Copyright (c) 2022 Xiaomi Corporation (authors: Fangjun Kuang)"]
+      }
+    },
+    {
+      "name": "sherpa-onnx-darwin-arm64",
+      "version": "1.13.8",
+      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
+      "generatedNotice": {
+        "licenseId": "Apache-2.0",
+        "copyrights": ["Copyright (c) 2022 Xiaomi Corporation (authors: Fangjun Kuang)"]
+      }
     }
   ]
 }
