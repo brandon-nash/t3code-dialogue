@@ -16,3 +16,4 @@ Format: [MADR](https://adr.github.io/madr/), kept short. Status is one of `propo
 | [0005](./0005-speakable-text-and-speak-tag.md)              | Replies are reduced to speakable prose; `<speak>` wins    | accepted                  |
 | [0006](./0006-fork-first-voice-mode.md)                     | Voice mode is fork-first, not an upstream PR              | accepted                  |
 | [0007](./0007-voice-routes-in-the-typed-environment-api.md) | Voice routes live in the typed environment HTTP API       | accepted                  |
+| [0009](./0009-fork-desktop-identity.md)                     | The fork installs as "T3 Dialogue" with its own T3 home   | accepted                  |

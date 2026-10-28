@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
+import { DESKTOP_BRANDS } from "./DesktopBrand.ts";
 import { resolveUserDataPath } from "./DesktopUserData.ts";
 
 it.effect.each(["t3code", "T3 Code (Alpha)"])(
@@ -39,4 +40,23 @@ it.effect.each(["t3code", "T3 Code (Alpha)"])(
         "existing V2 state",
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("gives a fork brand its own profile without touching the official app's state", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-fork-profile-" });
+    const official = path.join(directory, "t3code-v2");
+    yield* fs.makeDirectory(official, { recursive: true });
+    yield* fs.writeFileString(path.join(official, "Local State"), '{"os_crypt":{}}');
+    const resolved = yield* resolveUserDataPath({
+      appDataDirectory: directory,
+      isDevelopment: false,
+      platform: "win32",
+      brand: DESKTOP_BRANDS.dialogue,
+    });
+    assert.equal(resolved, path.join(directory, "t3code-dialogue"));
+    assert.isFalse(yield* fs.exists(path.join(resolved, "Local State")));
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

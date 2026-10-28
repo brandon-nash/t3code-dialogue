@@ -9,6 +9,7 @@ import {
   type LinuxPasswordStoreSwitch,
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
+import { DESKTOP_BRAND } from "./DesktopBrand.ts";
 import {
   resolveDesktopBaseDir,
   resolveDesktopStateDir,
@@ -59,6 +60,7 @@ function resolveEarlyDesktopSettingsPath(input: {
     homeDirectory: input.homeDirectory,
     joinPath: input.joinPath,
     t3Home,
+    homeSegments: DESKTOP_BRAND.homeSegments,
   });
   const stateDir = resolveDesktopStateDir({
     baseDir,
@@ -146,7 +148,7 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxWmClass: isDevelopment ? "t3code-dev" : DESKTOP_BRAND.scheme,
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,

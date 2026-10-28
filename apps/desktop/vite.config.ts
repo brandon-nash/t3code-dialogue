@@ -3,6 +3,7 @@ import { defaultInclude, defineConfig } from "vite-plus";
 
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+import { resolveDesktopBrand } from "@t3tools/shared/desktopBrand";
 
 const repoEnv = loadRepoEnv();
 
@@ -13,6 +14,9 @@ const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
 const publicConfigDefine = {
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
+  ),
+  __T3CODE_DESKTOP_BRAND__: JSON.stringify(
+    resolveDesktopBrand(process.env.T3CODE_DESKTOP_BRAND).id,
   ),
 };
 
