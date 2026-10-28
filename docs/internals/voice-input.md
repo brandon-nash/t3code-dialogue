@@ -2,8 +2,10 @@
 
 Transcription edits a composer draft. It does not submit an agent turn. Audio is
 temporary client input, and only normal message submission sends the resulting
-text. The current implementation transcribes locally on supported iOS devices;
-environment-backed transcription is not implemented.
+text. iOS transcribes on the device. Web and desktop send the recording to the
+environment that owns the thread through
+[the environment transcriber](../../packages/client-runtime/src/voice-input/environmentTranscriber.ts);
+that environment runs the local models described in the voice ADRs.
 
 The [shared controller](../../packages/client-runtime/src/voice-input/controller.ts)
 owns the operation while the client supplies capture and transcription. Preparation

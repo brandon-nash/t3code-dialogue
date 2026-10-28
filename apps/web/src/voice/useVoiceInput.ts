@@ -1,140 +1,154 @@
-/** Push-to-talk dictation: record, convert to 16 kHz PCM, transcribe on the server's Parakeet. */
+/**
+ * Push-to-talk dictation on web: the shared voice-input controller drives a MediaRecorder and
+ * the thread environment's speech model, and commits into the composer draft it captured.
+ */
+import {
+  createEnvironmentVoiceTranscriber,
+  VoiceInputController,
+  type VoiceDraftSnapshot,
+  type VoiceInputPhase,
+  type VoiceInputState,
+} from "@t3tools/client-runtime/voice-input";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { useStableCallback } from "../hooks/useStableCallback";
+import { BrowserVoiceRecorder } from "./browserRecorder";
+import { transcriptReplacement } from "./draftReplacement";
 import { recordingToSpeechPcm } from "./pcm";
-import { transcribeSpeech, VoiceRequestError } from "./voiceApi";
+import { transcribeSpeech } from "./voiceApi";
 
-// Matches the server's body cap; push-to-talk past five minutes is a stuck key.
-const MAX_RECORDING_MS = 5 * 60 * 1000;
+export type { VoiceInputPhase };
 
-export type VoiceInputPhase = "idle" | "starting" | "recording" | "transcribing";
-
-interface ActiveRecording {
-  /** The recording transcribes where it started, even if the composer moves on. */
-  readonly environmentId: EnvironmentId;
-  readonly recorder: MediaRecorder;
-  readonly stream: MediaStream;
-  readonly chunks: Blob[];
-  readonly limitTimer: ReturnType<typeof setTimeout>;
-  readonly onEscape: (event: KeyboardEvent) => void;
-  discard: boolean;
+export interface VoiceDraftAdapter {
+  readonly ownerKey: string;
+  /** Text and caret in the same coordinates `replaceRange` takes. */
+  readonly read: () => { readonly text: string; readonly cursor: number };
+  /** False when the composer cannot take input right now. */
+  readonly replaceRange: (
+    start: number,
+    end: number,
+    insertion: string,
+    cursorAfter: number,
+  ) => boolean;
 }
 
-function describeVoiceError(cause: unknown): string {
-  if (cause instanceof DOMException && cause.name === "NotAllowedError") {
-    return "Microphone access is blocked. Allow it in your browser or system settings.";
-  }
-  if (cause instanceof DOMException && cause.name === "NotFoundError") {
-    return "No microphone found.";
-  }
-  if (cause instanceof VoiceRequestError) return cause.message;
-  return cause instanceof Error ? cause.message : "Voice input failed.";
-}
-
-export function useVoiceInput(options: {
+export interface VoiceInputOptions {
   readonly environmentId: EnvironmentId;
-  readonly onTranscript: (text: string) => void;
+  readonly draft: VoiceDraftAdapter;
   readonly onRecordingStart?: () => void;
   readonly onError: (message: string) => void;
-}) {
+}
+
+function describeMicrophoneError(cause: unknown): string | null {
+  return cause instanceof DOMException && cause.name === "NotFoundError"
+    ? "No microphone found."
+    : null;
+}
+
+function createController(
+  latest: RefObject<VoiceInputOptions>,
+  onStateChange: (state: VoiceInputState) => void,
+): VoiceInputController {
+  let controller: VoiceInputController;
+  const recorder = new BrowserVoiceRecorder((status) => {
+    void controller.handleRecorderStatus(status);
+  });
+  const decodeRecording = async (uri: string) =>
+    recordingToSpeechPcm(await (await fetch(uri)).blob());
+  controller = new VoiceInputController({
+    recorder,
+    // The environment is fixed when recording starts, so the transcript lands where it began.
+    getTranscriber: () => {
+      const environmentId = latest.current.environmentId;
+      return createEnvironmentVoiceTranscriber({
+        decodeRecording,
+        transcribe: (pcm) => transcribeSpeech(environmentId, pcm),
+      });
+    },
+    requestPermission: () =>
+      recorder.acquireMicrophone().catch((cause: unknown) => {
+        const message = describeMicrophoneError(cause);
+        if (message) latest.current.onError(message);
+        throw cause;
+      }),
+    configureRecording: async () => {},
+    releaseRecording: async () => recorder.release(),
+    deleteRecording: (uri) => URL.revokeObjectURL(uri),
+    readDraft: (): VoiceDraftSnapshot => {
+      const draft = latest.current.draft;
+      const { text, cursor } = draft.read();
+      return {
+        ownerKey: draft.ownerKey,
+        text,
+        selection: { start: cursor, end: cursor },
+        revision: 0,
+      };
+    },
+    commitDraft: (text, selection) => {
+      const draft = latest.current.draft;
+      const { start, end, insertion } = transcriptReplacement(draft.read().text, text);
+      if (!draft.replaceRange(start, end, insertion, selection.start)) {
+        latest.current.onError("The composer is busy, so the transcript was not inserted.");
+      }
+    },
+    onStateChange: (state) => {
+      onStateChange(state);
+      if (state.phase !== "error") return;
+      if (state.error) latest.current.onError(state.error);
+      // The controller releases the microphone after reporting; clear the error once it has.
+      queueMicrotask(() => controller.cancel());
+    },
+  });
+  return controller;
+}
+
+export function useVoiceInput(options: VoiceInputOptions) {
   const [phase, setPhase] = useState<VoiceInputPhase>("idle");
-  const phaseRef = useRef<VoiceInputPhase>("idle");
-  const activeRef = useRef<ActiveRecording | null>(null);
+  const latest = useRef(options);
+  // oxlint-disable-next-line react/refs -- Transcription finishes later and must commit through the composer's current adapter, not the one captured at start.
+  latest.current = options;
+  // Built on first use, in a handler, so the microphone is never touched by a render.
+  const controllerRef = useRef<VoiceInputController | null>(null);
+  /** The controller's phase right now, for handlers that must not read a stale render. */
+  const readPhase = useStableCallback(() => controllerRef.current?.currentState.phase ?? "idle");
 
-  const updatePhase = (next: VoiceInputPhase) => {
-    phaseRef.current = next;
-    setPhase(next);
-  };
-
-  const release = (recording: ActiveRecording) => {
-    clearTimeout(recording.limitTimer);
-    window.removeEventListener("keydown", recording.onEscape, { capture: true });
-    for (const track of recording.stream.getTracks()) track.stop();
-    if (activeRef.current === recording) activeRef.current = null;
-  };
-
-  const finish = useStableCallback(async (recording: ActiveRecording) => {
-    release(recording);
-    if (recording.discard) {
-      updatePhase("idle");
-      return;
-    }
-    updatePhase("transcribing");
-    try {
-      const blob = new Blob(recording.chunks, { type: recording.recorder.mimeType });
-      const result = await transcribeSpeech(
-        recording.environmentId,
-        await recordingToSpeechPcm(blob),
-      );
-      if (result.text.length > 0) options.onTranscript(result.text);
-    } catch (cause) {
-      options.onError(describeVoiceError(cause));
-    } finally {
-      updatePhase("idle");
-    }
+  const stop = useStableCallback(() => {
+    void controllerRef.current?.stop();
   });
 
   const cancel = useStableCallback(() => {
-    const recording = activeRef.current;
-    if (!recording) return;
-    recording.discard = true;
-    if (recording.recorder.state === "recording") recording.recorder.stop();
-    else release(recording);
+    controllerRef.current?.cancel();
   });
 
-  const start = useStableCallback(async () => {
-    if (phaseRef.current !== "idle") return;
-    updatePhase("starting");
-    options.onRecordingStart?.();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-      });
-      const recorder = new MediaRecorder(stream);
-      const recording: ActiveRecording = {
-        environmentId: options.environmentId,
-        recorder,
-        stream,
-        chunks: [],
-        discard: false,
-        limitTimer: setTimeout(() => {
-          if (recorder.state === "recording") recorder.stop();
-        }, MAX_RECORDING_MS),
-        onEscape: (event) => {
-          if (event.key !== "Escape") return;
-          event.preventDefault();
-          event.stopPropagation();
-          cancel();
-        },
-      };
-      recorder.addEventListener("dataavailable", (event) => {
-        if (event.data.size > 0) recording.chunks.push(event.data);
-      });
-      recorder.addEventListener("stop", () => void finish(recording), { once: true });
-      window.addEventListener("keydown", recording.onEscape, { capture: true });
-      activeRef.current = recording;
-      recorder.start();
-      updatePhase("recording");
-    } catch (cause) {
-      updatePhase("idle");
-      options.onError(describeVoiceError(cause));
-    }
-  });
-
-  const stop = useStableCallback(() => {
-    const recording = activeRef.current;
-    if (recording?.recorder.state === "recording") recording.recorder.stop();
+  const start = useStableCallback(() => {
+    controllerRef.current ??= createController(latest, (state) => setPhase(state.phase));
+    if (controllerRef.current.currentState.phase !== "idle") return;
+    latest.current.onRecordingStart?.();
+    void controllerRef.current.start();
   });
 
   const toggle = useStableCallback(() => {
-    if (phaseRef.current === "idle") void start();
-    else if (phaseRef.current === "recording") stop();
+    const current = readPhase();
+    if (current === "idle") start();
+    else if (current === "recording") stop();
   });
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Leaving the thread mid-sentence must drop the recording and release the microphone.
-  useEffect(() => cancel, [cancel]);
+  // oxlint-disable-next-line t3code/react-effect-budget -- Esc must discard a recording from anywhere on the page, and only while one is active.
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [phase, cancel]);
 
-  return { phase, phaseRef, start, stop, cancel, toggle };
+  // oxlint-disable-next-line t3code/react-effect-budget -- Leaving the thread mid-sentence must release the microphone and stop any transcription from committing.
+  useEffect(() => () => controllerRef.current?.dispose(), []);
+
+  return { phase, readPhase, start, stop, cancel, toggle };
 }
