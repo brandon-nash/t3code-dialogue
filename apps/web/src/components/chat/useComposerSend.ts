@@ -15,6 +15,7 @@ import {
   makeThreadErrorSetter,
 } from "../ChatView.logic";
 import { isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
+import { useVoiceRepliesEnabled } from "../../voice/voicePreferences";
 import {
   AuthOrchestrationOperateScope,
   DEFAULT_MODEL,
@@ -329,6 +330,7 @@ export function useComposerSend(input: ComposerSendInput) {
   const navigate = useNavigate();
   const clientSettingsHydrated = useClientSettingsHydrated();
   const planModeEnabled = useEnvironmentSettings(environmentId, selectPlanModeEnabled);
+  const [voiceRepliesEnabled] = useVoiceRepliesEnabled();
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -1271,6 +1273,7 @@ export function useComposerSend(input: ComposerSendInput) {
             messageId: messageIdForSend,
             role: "user",
             attachments: turnAttachmentsResult.value,
+            ...(voiceRepliesEnabled ? { spokenReply: true } : {}),
             ...withMessageContext({
               text: outgoingMessageText,
               context: buildOutgoingMessageContext(

@@ -9,16 +9,15 @@ import type {
   VoiceStatus,
 } from "@t3tools/contracts";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
-import * as Schema from "effect/Schema";
 import { MicIcon, Volume2Icon, VolumeXIcon } from "lucide-react";
 import { use, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
-import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { registerCommands } from "../../shortcuts/dispatcher";
 import { useSpokenReplies } from "../../voice/useSpokenReplies";
 import { useVoiceInput, type VoiceDraftAdapter } from "../../voice/useVoiceInput";
+import { useVoiceRepliesEnabled } from "../../voice/voicePreferences";
 import { fetchVoiceStatus, type VoiceAvailability } from "../../voice/voiceApi";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
@@ -66,11 +65,7 @@ export function ComposerVoiceControls({
   // A probe for another environment is stale, so the controls wait for this one's answer.
   const availability: VoiceAvailability | typeof CHECKING =
     probe?.environmentId === environmentId ? probe.availability : CHECKING;
-  const [repliesEnabled, setRepliesEnabled] = useLocalStorage(
-    "t3code.voiceRepliesEnabled",
-    false,
-    Schema.Boolean,
-  );
+  const [repliesEnabled, setRepliesEnabled] = useVoiceRepliesEnabled();
   const pressRef = useRef<{ readonly startedRecording: boolean; readonly at: number } | null>(null);
 
   const showError = (message: string) => {

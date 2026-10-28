@@ -171,6 +171,8 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
     readonly attachments: ReadonlyArray<ChatAttachment | UploadChatAttachment>;
     readonly context?: import("@t3tools/contracts").OrchestrationMessageContext;
     readonly idleCompaction?: import("@t3tools/contracts").OrchestrationV2IdleCompaction;
+    /** The sender will hear the reply; the server asks the agent for a spoken summary. */
+    readonly spokenReply?: boolean;
   };
   readonly modelSelection?: ModelSelection;
   readonly titleSeed?: string;
@@ -749,6 +751,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       ...(input.message.idleCompaction === undefined
         ? {}
         : { idleCompaction: input.message.idleCompaction }),
+      ...(input.message.spokenReply === true ? { spokenReply: true } : {}),
       attachments,
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
       ...(input.sourceProposedPlan === undefined
@@ -813,6 +816,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
     ...(input.message.idleCompaction === undefined
       ? {}
       : { idleCompaction: input.message.idleCompaction }),
+    ...(input.message.spokenReply === true ? { spokenReply: true } : {}),
     attachments,
     ...(shouldSendTitleSeed ? { titleSeed: input.titleSeed } : {}),
     ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
