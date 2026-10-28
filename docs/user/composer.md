@@ -187,11 +187,11 @@ before sending. Recordings can be up to five minutes long.
 
 Turn on the **speaker** button to hear each completed reply read aloud. While it
 is on, each message you send asks the agent to end its reply with a one or two
-sentence spoken summary. You hear that summary; the written reply hides it. A
-reply without one is read in reduced form: code blocks, tables, and links are
-skipped, and long replies are shortened.
-Starting to dictate, muting, or switching threads stops playback. The setting is
-remembered per browser.
+sentence spoken summary wrapped in `<speak>…</speak>`. You hear that summary; the
+written reply hides it. A reply without one is read in reduced form: code blocks,
+tables, and links are skipped, and long replies are shortened.
+Typing, sending a message, starting to dictate, muting, or switching threads stops
+playback. The setting is remembered per browser.
 
 A phrase book in the server's `voice.json` expands spoken shortcuts and fixes
 the spelling of names and jargon in every transcript. It also sets the reply

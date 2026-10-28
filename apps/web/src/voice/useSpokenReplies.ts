@@ -6,11 +6,8 @@ import { useEffect, useRef } from "react";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentThreadDetails } from "../state/threads";
-import { createSpokenRunTracker, pickSpokenReply } from "./spokenReplies.logic";
+import { createSpokenRunTracker, resolveSpokenReplyText } from "./spokenReplies.logic";
 import { synthesizeReply } from "./voiceApi";
-
-// The run summary can settle a beat before the last streamed delta lands in the detail.
-const FINAL_TEXT_WAIT_MS = 4000;
 
 interface Playback {
   readonly abort: AbortController;
@@ -26,27 +23,25 @@ function readFinalReply(
   const atom = environmentThreadDetails.threadAtom(threadRef);
   const read = () => {
     const thread = appAtomRegistry.get(atom);
-    if (!thread) return undefined;
-    return pickSpokenReply(thread.projection.messages, run.runId, run.assistantMessageId);
+    if (!thread) return { settled: false } as const;
+    return resolveSpokenReplyText(thread.projection, run.runId, run.assistantMessageId);
   };
 
   const current = read();
-  if (current && !current.streaming) return Promise.resolve(current.text);
+  if (current.settled) return Promise.resolve(current.text);
 
   return new Promise((resolve) => {
-    let settled = false;
+    let done = false;
     const settle = (text: string | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
+      if (done) return;
+      done = true;
       unsubscribe();
       resolve(text);
     };
     const unsubscribe = appAtomRegistry.subscribe(atom, () => {
       const reply = read();
-      if (reply && !reply.streaming) settle(reply.text);
+      if (reply.settled) settle(reply.text);
     });
-    const timer = setTimeout(() => settle(read()?.text ?? null), FINAL_TEXT_WAIT_MS);
     signal.addEventListener("abort", () => settle(null), { once: true });
   });
 }
