@@ -29,6 +29,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { taskPrompt } from "../../apps/server/src/mcp/OrchestratorMcpService.ts";
 import * as McpInvocationContext from "../../apps/server/src/mcp/McpInvocationContext.ts";
 import { ORCHESTRATOR_MCP_RUNNING_TASK_NEXT } from "@t3tools/contracts";
+import { spokenReplyTurnText } from "@t3tools/provider-core/server/spokenReplyInstructions";
 import { formatThreadLink } from "@t3tools/shared/threadLinks";
 import { buildCodexAdditionalContext } from "../../apps/server/src/provider/CodexDeveloperInstructions.ts";
 import { AttachmentToolkit } from "../../apps/server/src/mcp/toolkits/attachment/tools.ts";
@@ -168,6 +169,8 @@ export const McpToolUseCase = Schema.Struct({
     /** delegate_task `role` for a delegated child. T3 builds the child's first message from it. */
     delegateRole: Schema.optional(OrchestratorMcpTaskRole),
     context: Schema.optional(Schema.String),
+    /** The user has replies read aloud, so the prompt carries T3's spoken-reply instruction. */
+    spokenReply: Schema.optional(Schema.Boolean),
     priorTurns: Schema.optional(
       Schema.Array(
         Schema.Struct({
@@ -717,7 +720,8 @@ export const buildMessages = (sample: Sample) => {
   }
   const { prompt } = testCase;
   const childPrompt = () => taskPrompt({ task: prompt, role: delegateRole });
-  push("user", text(role === "delegated-child" ? childPrompt() : prompt));
+  const userPrompt = role === "delegated-child" ? childPrompt() : prompt;
+  push("user", text(spokenReplyTurnText({ spokenReply: testCase.setup.spokenReply }, userPrompt)));
   return messages;
 };
 

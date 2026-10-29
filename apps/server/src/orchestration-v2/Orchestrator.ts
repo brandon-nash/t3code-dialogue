@@ -4283,6 +4283,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     readonly scheduledTaskId?: OrchestrationV2ConversationMessage["scheduledTaskId"];
     readonly senderThreadId?: OrchestrationV2ConversationMessage["senderThreadId"];
     readonly idleCompaction?: OrchestrationV2ConversationMessage["idleCompaction"];
+    readonly spokenReply?: OrchestrationV2ConversationMessage["spokenReply"];
     readonly delegatedCompletion?: OrchestrationV2ConversationMessage["delegatedCompletion"];
     readonly forceRestart: boolean;
   }) {
@@ -4449,6 +4450,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           text: input.text,
           attachments: input.attachments,
           ...(input.context ? { context: input.context } : {}),
+          ...(input.spokenReply === undefined ? {} : { spokenReply: input.spokenReply }),
           streaming: false,
           createdAt: now,
           updatedAt: now,
@@ -5428,6 +5430,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         messageId: command.messageId,
         text: dispatchText,
         ...(command.context ? { context: command.context } : {}),
+        ...(command.spokenReply === undefined ? {} : { spokenReply: command.spokenReply }),
         attachments: command.attachments,
         createdBy: command.createdBy,
         creationSource: command.creationSource,
@@ -5676,6 +5679,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         role: "user",
         text: dispatchText,
         ...(command.context ? { context: command.context } : {}),
+        ...(command.spokenReply === undefined ? {} : { spokenReply: command.spokenReply }),
         attachments: command.attachments,
         streaming: false,
         createdAt: now,
@@ -6028,6 +6032,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         role: "user",
         text: dispatchText,
         ...(command.context ? { context: command.context } : {}),
+        ...(command.spokenReply === undefined ? {} : { spokenReply: command.spokenReply }),
         attachments: command.attachments,
         streaming: false,
         createdAt: now,
@@ -6717,6 +6722,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       role: "user",
       text: dispatchText,
       ...(command.context ? { context: command.context } : {}),
+      ...(command.spokenReply === undefined ? {} : { spokenReply: command.spokenReply }),
       attachments: command.attachments,
       streaming: false,
       createdAt: now,
@@ -8438,6 +8444,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       targetRunId: command.targetRunId,
       messageId: queuedMessage.id,
       text: queuedMessage.text,
+      ...(queuedMessage.spokenReply === undefined
+        ? {}
+        : { spokenReply: queuedMessage.spokenReply }),
       attachments: queuedMessage.attachments,
       ...(queuedMessage.context ? { context: queuedMessage.context } : {}),
       createdBy: queuedMessage.createdBy,

@@ -7,6 +7,10 @@
       "types": "./src/desktopBrand.ts",
       "import": "./src/desktopBrand.ts"
     },
+    "./speakBlock": {
+      "types": "./src/speakBlock.ts",
+      "import": "./src/speakBlock.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"

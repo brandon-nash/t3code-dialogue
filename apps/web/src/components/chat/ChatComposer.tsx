@@ -129,7 +129,8 @@ import {
 import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { shortcutLabelForCommand } from "../../keybindings";
-import { ComposerVoiceControls } from "./ComposerVoiceControls";
+import { ComposerVoiceControls, type ComposerVoiceControlsHandle } from "./ComposerVoiceControls";
+import { isInterruptingKey } from "../../voice/spokenReplies.logic";
 import type { VoiceDraftAdapter } from "../../voice/useVoiceInput";
 import {
   type TerminalContextDraft,
@@ -1091,6 +1092,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const pasteAsTextShortcutUntilRef = useRef(0);
   const composerFormRef = useRef<HTMLFormElement>(null);
+  const voiceControlsRef = useRef<ComposerVoiceControlsHandle>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
   const providerInputRejectedRef = useRef(false);
   const composerSelectLockRef = useRef(false);
@@ -2083,6 +2085,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     dispatchMode?: ComposerDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
   ) => {
+    voiceControlsRef.current?.interrupt();
     if (
       noProviderAvailable ||
       isSendDisabled ||
@@ -3332,6 +3335,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     <form
       ref={composerFormRef}
       onSubmit={submitComposerStable}
+      onKeyDownCapture={(event) => {
+        if (isInterruptingKey(event)) voiceControlsRef.current?.interrupt();
+      }}
       onPointerDownCapture={(event) => {
         const target = event.target;
         if (isInsideRestingComposerControlScope(target)) return;
@@ -3792,6 +3798,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
                 >
                   <ComposerVoiceControls
+                    ref={voiceControlsRef}
                     threadRef={routeThreadRef}
                     latestRun={props.activeThreadShell?.latestRun ?? null}
                     keybindings={keybindings}
