@@ -72,7 +72,7 @@ export function ComposerVoiceControls({
     toastManager.add({ type: "error", title: "Voice", description: message });
   };
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Probe the thread's environment; older servers and read-only sessions have no voice.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Probe the thread's environment; older servers and read-only sessions have no voice.
   useEffect(() => {
     let cancelled = false;
     const settle = (availability: VoiceAvailability) => {
@@ -131,7 +131,7 @@ export function ComposerVoiceControls({
   const sttReady =
     availability.kind === "present" && componentHint(availability.status.stt) === null;
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- The shortcut scope lives exactly as long as a foreground composer with working dictation.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- The shortcut scope lives exactly as long as a foreground composer with working dictation.
   useEffect(() => {
     if (backgroundThread || !sttReady) return;
     return registerCommands({ "composer.voiceInput": handleShortcut }, { capture: true });

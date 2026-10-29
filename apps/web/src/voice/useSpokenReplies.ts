@@ -91,7 +91,7 @@ export function useSpokenReplies(options: {
     }
   });
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Run completion arrives from the server push, not from a handler in this component.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Run completion arrives from the server push, not from a handler in this component.
   useEffect(() => {
     // A new thread gets a fresh tracker (so its existing reply is never read) and silences
     // whatever the previous thread was still saying; so does muting.
@@ -105,7 +105,7 @@ export function useSpokenReplies(options: {
     }
   }, [threadKey, latestRun, enabled, speak, stop]);
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Unmounting must not leave a reply playing.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Unmounting must not leave a reply playing.
   useEffect(() => stop, [stop]);
 
   return { stop };

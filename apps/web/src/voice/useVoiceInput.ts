@@ -134,7 +134,7 @@ export function useVoiceInput(options: VoiceInputOptions) {
     else if (current === "recording") stop();
   });
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Esc must discard a recording from anywhere on the page, and only while one is active.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Esc must discard a recording from anywhere on the page, and only while one is active.
   useEffect(() => {
     if (phase !== "recording") return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -147,7 +147,7 @@ export function useVoiceInput(options: VoiceInputOptions) {
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [phase, cancel]);
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Leaving the thread mid-sentence must release the microphone and stop any transcription from committing.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Leaving the thread mid-sentence must release the microphone and stop any transcription from committing.
   useEffect(() => () => controllerRef.current?.dispose(), []);
 
   return { phase, readPhase, start, stop, cancel, toggle };
