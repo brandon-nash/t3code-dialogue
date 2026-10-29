@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./desktopBrand": {
+      "types": "./src/desktopBrand.ts",
+      "import": "./src/desktopBrand.ts"
+    },
     "./speakBlock": {
       "types": "./src/speakBlock.ts",
       "import": "./src/speakBlock.ts"

@@ -213,6 +213,17 @@ DMGs default to the host architecture. Use `--arch` to choose another target and
 to retain packaging files for inspection. Run `vp run dist:desktop:artifact --help` for other
 options.
 
+### Fork brand
+
+```sh
+T3CODE_DESKTOP_BRAND=dialogue vp run dist:desktop:dmg
+```
+
+Builds "T3 Dialogue", which installs and runs beside the official app: its own bundle id,
+profile folder, `t3code-dialogue://` scheme, and `~/.t3/dialogue` as its T3 home, with
+`~/.t3/voice` shared. Local builds have no update feed. See
+[ADR 0009](../adr/0009-fork-desktop-identity.md).
+
 ### Linux AppImage prerequisites
 
 Build on Linux because the browser-secret helper links against the host's libsecret. Install

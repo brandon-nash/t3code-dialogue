@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - Tests use Node's glob matcher to verify electron-builder exclusions.
+import { resolveDesktopBrand } from "@t3tools/shared/desktopBrand";
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
 
@@ -28,6 +29,8 @@ import {
   parseWslRuntimeArchiveMembers,
   readWorkspaceConfig,
   createBuildConfig,
+  resolveDesktopProductName,
+  resolveDesktopBuildIconAssets,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -1668,6 +1671,35 @@ it.effect.skipIf(!symlinksSupported)("rebases packaged links into the isolated t
     assert.equal(
       yield* fs.realPath(path.join(destination, "node_modules/example-absolute")),
       resolvedCopiedPackage,
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("builds the fork brand beside the official app with no update feed", () =>
+  Effect.gen(function* () {
+    const brand = resolveDesktopBrand("dialogue");
+    const config = yield* createBuildConfig(
+      "mac",
+      "dmg",
+      "0.0.33",
+      false,
+      false,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      brand,
+    );
+    assert.equal(config.appId, "com.brandon-nash.t3code-dialogue");
+    assert.equal(config.productName, "T3 Dialogue");
+    assert.equal(config.artifactName, "T3-Dialogue-${version}-${arch}.${ext}");
+    assert.isNull(config.publish);
+    const mac = config.mac as { protocols: ReadonlyArray<{ schemes: ReadonlyArray<string> }> };
+    assert.deepStrictEqual(mac.protocols[0]?.schemes, ["t3code-dialogue"]);
+    assert.equal(resolveDesktopProductName("0.0.33-nightly.20260101.1", brand), "T3 Dialogue");
+    assert.equal(
+      resolveDesktopBuildIconAssets("0.0.33", brand).macIconPng,
+      "assets/dialogue/dialogue-macos-1024.png",
     );
   }).pipe(Effect.provide(NodeServices.layer)),
 );
