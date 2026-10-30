@@ -23,6 +23,8 @@ export const BRAND_ASSET_PATHS = {
   nightlyWebFavicon32Png: "assets/nightly/nightly-web-favicon-32x32.png",
   nightlyWebAppleTouchIconPng: "assets/nightly/nightly-web-apple-touch-180.png",
 
+  dialogueMacIconPng: "assets/dialogue/dialogue-macos-1024.png",
+
   developmentDesktopIconPng: "assets/dev/blueprint-macos-1024.png",
   developmentWindowsIconIco: "assets/dev/blueprint-windows.ico",
   developmentWebFaviconIco: "assets/dev/blueprint-web-favicon.ico",
@@ -39,10 +41,6 @@ export type WebAssetChannel = (typeof WEB_ASSET_CHANNELS)[number];
 
 export function resolveWebAssetBrandForChannel(channel: WebAssetChannel): WebAssetBrand {
   return channel === "nightly" ? "nightly" : "production";
-}
-
-export function resolveWebAssetBrandForPackageVersion(version: string): WebAssetBrand {
-  return /^[^-+]+-(?:nightly|preview)\./.test(version) ? "nightly" : "production";
 }
 
 export interface IconOverride {

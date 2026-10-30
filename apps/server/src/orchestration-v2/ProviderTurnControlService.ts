@@ -1,4 +1,5 @@
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
+import { spokenReplyTurnText } from "@t3tools/provider-core/server/spokenReplyInstructions";
 import {
   MessageId,
   type NodeId,
@@ -127,7 +128,11 @@ export const layer: Layer.Layer<
       const interruptProviderThread = targetsRecordedSession
         ? providerThread
         : { ...providerThread, providerSessionId: input.providerSessionId };
-      if (providerTurn.status !== "running") {
+      const continuingRun =
+        input.operation === "steer" &&
+        context.run?.status === "running" &&
+        context.run.activeAttemptId === providerTurn.runAttemptId;
+      if (providerTurn.status !== "running" && !continuingRun) {
         if (input.operation === "steer") {
           return yield* new ProviderTurnControlError({
             threadId: input.threadId,
@@ -353,10 +358,13 @@ export const layer: Layer.Layer<
               providerTurnId: loaded.providerTurn.id,
               message: {
                 messageId: message.id,
-                text: projectComposerContextForProvider({
-                  text: message.text,
-                  records: message.context?.records ?? [],
-                }),
+                text: spokenReplyTurnText(
+                  message,
+                  projectComposerContextForProvider({
+                    text: message.text,
+                    records: message.context?.records ?? [],
+                  }),
+                ),
                 attachments: message.attachments,
                 createdBy: message.createdBy,
                 creationSource: message.creationSource,

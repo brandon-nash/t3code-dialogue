@@ -1,9 +1,10 @@
 // @effect-diagnostics nodeBuiltinImport:off - Tests use Node's glob matcher to verify electron-builder exclusions.
+import { resolveDesktopBrand } from "@t3tools/shared/desktopBrand";
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { extractFile } from "@electron/asar";
+import { createPackageWithOptions, extractFile } from "@electron/asar";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Deferred from "effect/Deferred";
@@ -28,6 +29,8 @@ import {
   parseWslRuntimeArchiveMembers,
   readWorkspaceConfig,
   createBuildConfig,
+  resolveDesktopProductName,
+  resolveDesktopBuildIconAssets,
   DESKTOP_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -45,7 +48,9 @@ import {
   ancestorNodeModulesPaths,
   copyDirectoryPreservingSymlinks,
   LinuxBrowserSecretHostError,
+  MacPackagedAppMissingError,
   stageBrowserSecret,
+  validateMacPackagedPayload,
   validateWindowsPackagedPayload,
   verifyPackagedBundleIsSelfContained,
   WindowsPrimaryNativeProbeError,
@@ -209,6 +214,26 @@ const makeWindowsPayloadFixture = Effect.fn("test.makeWindowsPayloadFixture")(fu
     generatedAsarPath,
     appExecutableName,
   } as const;
+});
+
+const makeMacPayloadFixture = Effect.fn("test.makeMacPayloadFixture")(function* (input: {
+  readonly serverEntrySource?: string;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-mac-payload-test-" });
+  const sourceDir = path.join(tempDir, "app-source");
+  const serverEntryPath = path.join(sourceDir, "apps/server/dist/bin.mjs");
+  yield* fs.makeDirectory(path.dirname(serverEntryPath), { recursive: true });
+  yield* fs.writeFileString(serverEntryPath, input.serverEntrySource ?? "console.log('server');\n");
+
+  const stageDistDir = path.join(tempDir, "dist");
+  const resourcesDir = path.join(stageDistDir, "mac-arm64/T3 Code.app/Contents/Resources");
+  yield* fs.makeDirectory(resourcesDir, { recursive: true });
+  yield* Effect.promise(() =>
+    createPackageWithOptions(sourceDir, path.join(resourcesDir, "app.asar"), {}),
+  );
+  return { stageDistDir } as const;
 });
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
@@ -1283,6 +1308,58 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("rejects a macOS app whose packaged server bundle cannot resolve", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeMacPayloadFixture({
+          serverEntrySource: 'import "t3code-deliberately-missing-package";\n',
+        });
+        const error = yield* validateMacPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+        }).pipe(Effect.flip);
+
+        assert.instanceOf(error, BundleNotSelfContainedError);
+        assert.include(error.output, "t3code-deliberately-missing-package");
+      }),
+    ),
+  );
+
+  it.effect("accepts a macOS app whose packaged server bundle resolves", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeMacPayloadFixture({});
+        yield* validateMacPackagedPayload({ stageDistDir: fixture.stageDistDir });
+      }),
+    ),
+  );
+
+  it.effect("rejects a macOS stage without a packaged app", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const stageDistDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-mac-payload-test-" });
+        const error = yield* validateMacPackagedPayload({ stageDistDir }).pipe(Effect.flip);
+
+        assert.instanceOf(error, MacPackagedAppMissingError);
+      }),
+    ),
+  );
+
+  it.effect("rejects a macOS app without app.asar", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const stageDistDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-mac-payload-test-" });
+        yield* fs.makeDirectory(`${stageDistDir}/mac-arm64/T3 Code.app/Contents/Resources`, {
+          recursive: true,
+        });
+        const error = yield* validateMacPackagedPayload({ stageDistDir }).pipe(Effect.flip);
+
+        assert.instanceOf(error, BundleNotSelfContainedError);
+      }),
+    ),
+  );
+
   it.effect("leaves the bundle self-check of a cross-built payload to the verify job", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1668,6 +1745,35 @@ it.effect.skipIf(!symlinksSupported)("rebases packaged links into the isolated t
     assert.equal(
       yield* fs.realPath(path.join(destination, "node_modules/example-absolute")),
       resolvedCopiedPackage,
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("builds the fork brand beside the official app with no update feed", () =>
+  Effect.gen(function* () {
+    const brand = resolveDesktopBrand("dialogue");
+    const config = yield* createBuildConfig(
+      "mac",
+      "dmg",
+      "0.0.33",
+      false,
+      false,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      brand,
+    );
+    assert.equal(config.appId, "com.brandon-nash.t3code-dialogue");
+    assert.equal(config.productName, "T3 Dialogue");
+    assert.equal(config.artifactName, "T3-Dialogue-${version}-${arch}.${ext}");
+    assert.isNull(config.publish);
+    const mac = config.mac as { protocols: ReadonlyArray<{ schemes: ReadonlyArray<string> }> };
+    assert.deepStrictEqual(mac.protocols[0]?.schemes, ["t3code-dialogue"]);
+    assert.equal(resolveDesktopProductName("0.0.33-nightly.20260101.1", brand), "T3 Dialogue");
+    assert.equal(
+      resolveDesktopBuildIconAssets("0.0.33", brand).macIconPng,
+      "assets/dialogue/dialogue-macos-1024.png",
     );
   }).pipe(Effect.provide(NodeServices.layer)),
 );

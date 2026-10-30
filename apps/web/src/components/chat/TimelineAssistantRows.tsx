@@ -1,4 +1,5 @@
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
+import { stripSpeakBlocks } from "@t3tools/shared/speakBlock";
 import { type RunId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { memo, use, useState } from "react";
@@ -25,7 +26,9 @@ import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts"
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  // The spoken summary is for the ear; the written reply hides it.
+  const messageText =
+    stripSpeakBlocks(row.message.text) || (row.message.streaming ? "" : "(empty response)");
 
   return (
     <>

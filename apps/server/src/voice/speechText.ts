@@ -3,15 +3,15 @@
  * `<speak>` block, when present, is the whole spoken reply.
  */
 
-const DEFAULT_MAX_SPOKEN_CHARS = 1200;
+import { extractSpeakBlocks } from "@t3tools/shared/speakBlock";
 
-const SPEAK_BLOCK = /<speak>([\s\S]*?)<\/speak>/gi;
+const DEFAULT_MAX_SPOKEN_CHARS = 1200;
 
 export function toSpeakableText(
   markdown: string,
   maxChars: number = DEFAULT_MAX_SPOKEN_CHARS,
 ): string {
-  const speakBlocks = [...markdown.matchAll(SPEAK_BLOCK)].map((match) => match[1] ?? "");
+  const speakBlocks = extractSpeakBlocks(markdown);
   const source = speakBlocks.length > 0 ? speakBlocks.join("\n") : markdown;
   return truncateAtSentence(cleanMarkdown(source), maxChars);
 }

@@ -18,6 +18,7 @@ import serverPackageJson from "../../../server/package.json" with { type: "json"
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
 import * as DesktopCliShim from "../app/DesktopCliShim.ts";
+import { DESKTOP_BRAND } from "../app/DesktopBrand.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
@@ -74,7 +75,6 @@ const DESKTOP_BACKEND_ENV_NAMES = [
   "T3CODE_NO_BROWSER",
   "T3CODE_HOST",
   "T3CODE_DESKTOP_WS_URL",
-  "T3CODE_DESKTOP_LAN_ACCESS",
   "T3CODE_DESKTOP_LAN_HOST",
   "T3CODE_DESKTOP_HTTPS_ENDPOINTS",
   "T3CODE_TAILSCALE_SERVE",
@@ -86,6 +86,7 @@ const WSL_FORWARDED_ENV_NAMES = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   "T3CODE_TELEMETRY_ENABLED",
+  "T3CODE_GITHUB_APP_CLIENT_ID",
   // Otherwise the WSL server keeps exporting to endpoints from the bootstrap.
   "T3CODE_OTEL_SDK_DISABLED",
   "OTEL_SDK_DISABLED",
@@ -533,6 +534,15 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
         T3CODE_CLI_PATH: Option.getOrUndefined(input.cliPath),
+        // A fork brand keeps its own T3 home but shares the voice models already on the machine.
+        ...(DESKTOP_BRAND.sharedVoiceSegments === null
+          ? {}
+          : {
+              T3CODE_VOICE_DIR: environment.path.join(
+                environment.homeDirectory,
+                ...DESKTOP_BRAND.sharedVoiceSegments,
+              ),
+            }),
       },
       extendEnv: true,
       bootstrap,

@@ -7,6 +7,10 @@
       "types": "./src/client.ts",
       "import": "./src/client.ts"
     },
+    "./modelShortName": {
+      "types": "./src/modelShortName.ts",
+      "import": "./src/modelShortName.ts"
+    },
     "./server/adapterDriver": {
       "types": "./src/server/adapterDriver.ts",
       "import": "./src/server/adapterDriver.ts"
@@ -146,6 +150,10 @@
     "./server/snapshotSettings": {
       "types": "./src/server/snapshotSettings.ts",
       "import": "./src/server/snapshotSettings.ts"
+    },
+    "./server/spokenReplyInstructions": {
+      "types": "./src/server/spokenReplyInstructions.ts",
+      "import": "./src/server/spokenReplyInstructions.ts"
     },
     "./server/subagentProjection": {
       "types": "./src/server/subagentProjection.ts",
