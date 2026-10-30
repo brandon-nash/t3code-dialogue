@@ -240,6 +240,7 @@ const layerAgentSessionImporterProvided = AgentSessionImporter.layer.pipe(
       layerProjectService,
       layerOrchestratorProvided,
       layerEventSink,
+      ProjectionStore.layer,
       IdAllocator.layer,
       ProviderSessionRuntime.layer,
     ),

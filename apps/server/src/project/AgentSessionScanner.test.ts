@@ -1173,6 +1173,67 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
       }),
     );
 
+    it.effect(
+      "keeps other providers' newer transcripts off the budget when sources are given",
+      () =>
+        Effect.gen(function* () {
+          const path = yield* Path.Path;
+          const nowMs = Date.parse("2026-08-24T12:00:00.000Z");
+          yield* TestClock.setTime(nowMs);
+          const claudeHomePath = yield* makeTempDir("t3code-claude-home-");
+          const codexHomePath = yield* makeTempDir("t3code-codex-home-");
+          const workspace = yield* makeTempDir("t3code-workspace-");
+          // 100 newer Codex rollouts fill the shared transcript budget before the Claude session.
+          for (let index = 0; index < 100; index += 1) {
+            yield* writeTranscript({
+              filePath: path.join(
+                codexHomePath,
+                "sessions",
+                "2026",
+                "08",
+                "24",
+                `rollout-${index}.jsonl`,
+              ),
+              contents: [
+                { type: "session_meta", payload: { id: `session-${index}`, cwd: workspace } },
+                {
+                  type: "event_msg",
+                  payload: { type: "user_message", message: "Import this prompt" },
+                },
+              ]
+                .map((record) => encodeTranscriptRecord(record))
+                .join("\n"),
+              mtimeMs: nowMs - index * 60_000,
+            });
+          }
+          yield* writeTranscript({
+            filePath: path.join(claudeHomePath, "projects", "-slug", "claude-older.jsonl"),
+            contents: `${JSON.stringify({
+              type: "user",
+              cwd: workspace,
+              sessionId: "claude-older",
+              timestamp: "2026-08-23T12:00:00.000Z",
+              message: { role: "user", content: "Fix the project" },
+            })}\n`,
+            mtimeMs: nowMs - 101 * 60_000,
+          });
+
+          yield* Effect.gen(function* () {
+            const scanner = yield* AgentSessionScanner.AgentSessionScanner;
+            const tags = (outcomes: ReadonlyArray<AgentSessionScanner.AgentSessionRecentThread>) =>
+              outcomes.map((outcome) =>
+                outcome._tag === "Importable" ? outcome.thread.providerSessionId : outcome._tag,
+              );
+            const unfiltered = yield* scanner.recentThreads(workspace).pipe(Stream.runCollect);
+            expect.soft(tags(unfiltered).at(-1)).toBe("Skipped");
+            const claudeOnly = yield* scanner
+              .recentThreads(workspace, [], { sources: ["claudeAgent"] })
+              .pipe(Stream.runCollect);
+            expect(tags(claudeOnly)).toEqual(["claude-older"]);
+          }).pipe(Effect.provide(layerScannerTest({ claudeHomePath, codexHomePath })));
+        }),
+    );
+
     it.effect("suppresses duplicate session copies without reporting a skipped import", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
