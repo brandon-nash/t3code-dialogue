@@ -54,9 +54,9 @@ it.effect("gives a fork brand its own profile without touching the official app'
       appDataDirectory: directory,
       isDevelopment: false,
       platform: "win32",
-      brand: DESKTOP_BRANDS.dialogue,
+      brand: DESKTOP_BRANDS.extended,
     });
-    assert.equal(resolved, path.join(directory, "t3code-dialogue"));
+    assert.equal(resolved, path.join(directory, "t3code-extended"));
     assert.isFalse(yield* fs.exists(path.join(resolved, "Local State")));
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

@@ -63,7 +63,7 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-/** T3CODE_DESKTOP_BRAND=dialogue builds the fork beside the official app; the bundle reads the same value. */
+/** T3CODE_DESKTOP_BRAND=extended builds the fork beside the official app; the bundle reads the same value. */
 const DESKTOP_BUILD_BRAND = resolveDesktopBrand(process.env.T3CODE_DESKTOP_BRAND);
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
@@ -2723,11 +2723,11 @@ export function resolveDesktopBuildIconAssets(
   version: string,
   brand: DesktopBrand = DESKTOP_BUILD_BRAND,
 ): DesktopBuildIconAssets {
-  if (brand.id === "dialogue") {
+  if (brand.id === "extended") {
     // Mac is the fork's only packaged platform; the others fall back to the stock Windows icon.
     return {
-      macIconPng: BRAND_ASSET_PATHS.dialogueMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.dialogueMacIconPng,
+      macIconPng: BRAND_ASSET_PATHS.extendedMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.extendedMacIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
     };
   }

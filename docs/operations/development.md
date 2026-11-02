@@ -229,13 +229,13 @@ options.
 ### Fork brand
 
 ```sh
-T3CODE_DESKTOP_BRAND=dialogue vp run dist:desktop:dmg
+T3CODE_DESKTOP_BRAND=extended vp run dist:desktop:dmg
 ```
 
-Builds "T3 Dialogue", which installs and runs beside the official app: its own bundle id,
-profile folder, `t3code-dialogue://` scheme, and `~/.t3/dialogue` as its T3 home, with
+Builds "T3 Extended", which installs and runs beside the official app: its own bundle id,
+profile folder, `t3code-extended://` scheme, and `~/.t3/extended` as its T3 home, with
 `~/.t3/voice` shared. Local builds have no update feed. See
-[ADR 0009](../adr/0009-fork-desktop-identity.md).
+[ADR 0010](../adr/0010-fork-brand-is-t3-extended.md).
 
 ### Linux AppImage prerequisites
 

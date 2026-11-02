@@ -17,4 +17,5 @@ Format: [MADR](https://adr.github.io/madr/), kept short. Status is one of `propo
 | [0006](./0006-fork-first-voice-mode.md)                     | Voice mode is fork-first, not an upstream PR                 | accepted                  |
 | [0007](./0007-voice-routes-in-the-typed-environment-api.md) | Voice routes live in the typed environment HTTP API          | accepted                  |
 | [0008](./0008-speak-instruction-and-hidden-block.md)        | Spoken turns ask for a `<speak>` summary; the reply hides it | accepted                  |
-| [0009](./0009-fork-desktop-identity.md)                     | The fork installs as "T3 Dialogue" with its own T3 home      | accepted                  |
+| [0009](./0009-fork-desktop-identity.md)                     | The fork installs as "T3 Dialogue" with its own T3 home      | superseded by 0010        |
+| [0010](./0010-fork-brand-is-t3-extended.md)                 | The fork brand is "T3 Extended"                              | accepted                  |

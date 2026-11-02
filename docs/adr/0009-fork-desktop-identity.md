@@ -1,6 +1,6 @@
 # 0009. The fork installs as "T3 Dialogue" with its own identity and T3 home
 
-- Status: accepted
+- Status: superseded by [0010](./0010-fork-brand-is-t3-extended.md)
 - Date: 2026-10-28
 
 ## Context

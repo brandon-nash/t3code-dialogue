@@ -12,9 +12,9 @@ describe("resolveDesktopBaseDir", () => {
         homeDirectory: "/home/user",
         joinPath,
         t3Home: Option.none(),
-        homeSegments: [".t3", "dialogue"],
+        homeSegments: [".t3", "extended"],
       }),
-    ).toBe("/home/user/.t3/dialogue");
+    ).toBe("/home/user/.t3/extended");
   });
 
   it("lets T3CODE_HOME override any brand", () => {
@@ -23,7 +23,7 @@ describe("resolveDesktopBaseDir", () => {
         homeDirectory: "/home/user",
         joinPath,
         t3Home: Option.some("/srv/t3"),
-        homeSegments: [".t3", "dialogue"],
+        homeSegments: [".t3", "extended"],
       }),
     ).toBe("/srv/t3");
   });

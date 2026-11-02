@@ -1751,7 +1751,7 @@ it.effect.skipIf(!symlinksSupported)("rebases packaged links into the isolated t
 
 it.effect("builds the fork brand beside the official app with no update feed", () =>
   Effect.gen(function* () {
-    const brand = resolveDesktopBrand("dialogue");
+    const brand = resolveDesktopBrand("extended");
     const config = yield* createBuildConfig(
       "mac",
       "dmg",
@@ -1764,16 +1764,16 @@ it.effect("builds the fork brand beside the official app with no update feed", (
       undefined,
       brand,
     );
-    assert.equal(config.appId, "com.brandon-nash.t3code-dialogue");
-    assert.equal(config.productName, "T3 Dialogue");
-    assert.equal(config.artifactName, "T3-Dialogue-${version}-${arch}.${ext}");
+    assert.equal(config.appId, "com.brandon-nash.t3code-extended");
+    assert.equal(config.productName, "T3 Extended");
+    assert.equal(config.artifactName, "T3-Extended-${version}-${arch}.${ext}");
     assert.isNull(config.publish);
     const mac = config.mac as { protocols: ReadonlyArray<{ schemes: ReadonlyArray<string> }> };
-    assert.deepStrictEqual(mac.protocols[0]?.schemes, ["t3code-dialogue"]);
-    assert.equal(resolveDesktopProductName("0.0.33-nightly.20260101.1", brand), "T3 Dialogue");
+    assert.deepStrictEqual(mac.protocols[0]?.schemes, ["t3code-extended"]);
+    assert.equal(resolveDesktopProductName("0.0.33-nightly.20260101.1", brand), "T3 Extended");
     assert.equal(
       resolveDesktopBuildIconAssets("0.0.33", brand).macIconPng,
-      "assets/dialogue/dialogue-macos-1024.png",
+      "assets/extended/extended-macos-1024.png",
     );
   }).pipe(Effect.provide(NodeServices.layer)),
 );
