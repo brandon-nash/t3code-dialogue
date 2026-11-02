@@ -91,11 +91,13 @@ function importId(source: ReturnType<typeof candidate>) {
 const seedOwner = Effect.fn(function* (
   source: ReturnType<typeof candidate>,
   lifecycle: "active" | "archived" | "deleted" = "active",
+  threadId = ThreadId.make(
+    `owner:${source.source.providerInstanceId}:${source.source.providerSessionId}`,
+  ),
 ) {
   const sink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
   const { providerInstanceId, providerSessionId, provider } = source.source;
-  const threadId = ThreadId.make(`owner:${providerInstanceId}:${providerSessionId}`);
   const driver = ProviderDriverKind.make(provider);
   const providerThread: OrchestrationV2ProviderThread = {
     id: ids.derive.providerThread({
@@ -200,12 +202,18 @@ const makeImporter = Effect.fn(function* (
         Layer.mergeAll(
           sinkLayer,
           Layer.succeed(IdAllocator.IdAllocatorV2, yield* IdAllocator.IdAllocatorV2),
+          Layer.succeed(ProjectionStore.ProjectionStoreV2, projections),
           Layer.succeed(
             ProviderSessionRuntime.ProviderSessionRuntimeRepository,
             yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository,
           ),
           Layer.mock(AgentSessionScanner.AgentSessionScanner)({
-            recentThreads: () => Stream.fromIterable(candidates),
+            recentThreads: (_root, _completed, options) =>
+              Stream.fromIterable(
+                options?.sources === undefined
+                  ? candidates
+                  : candidates.filter((entry) => options.sources!.includes(entry.thread.source)),
+              ),
           }),
           Layer.mock(ProjectService.ProjectService)({
             getById: () =>
@@ -235,7 +243,13 @@ const makeImporter = Effect.fn(function* (
     ),
   );
   const importer = Context.get(context, AgentSessionImporter.AgentSessionImporter);
-  return { run: importer.importRecentAgentThreads({ projectId }), published };
+  return {
+    run: importer.importRecentAgentThreads({ projectId }),
+    runWith: (sessionIds: ReadonlyArray<string>) =>
+      importer.importRecentAgentThreads({ projectId, sessionIds }),
+    list: importer.listRecentAgentSessions({ projectId }),
+    published,
+  };
 });
 
 it.effect(
@@ -268,7 +282,11 @@ it.effect(
       const unowned = candidate(CODEX_MODEL_SELECTION, "unowned");
       const importer = yield* makeImporter([active, archived, deleted, otherInstance, unowned]);
 
-      expect(yield* importer.run).toEqual({ importedCount: 2, skippedCount: 0 });
+      expect(yield* importer.run).toEqual({
+        importedCount: 2,
+        skippedCount: 0,
+        threadIds: [importId(otherInstance), importId(unowned)],
+      });
       for (const source of [active, archived, deleted]) {
         const threadId = importId(source);
         expect(yield* Effect.option(projections.getThread(threadId))).toEqual(Option.none());
@@ -327,8 +345,12 @@ it.effect("rechecks ownership after the import reaches the commit transaction", 
     // Commit ownership after all pre-transaction reads, before the import acquires SQLite.
     const ownerId = yield* seedOwner(source);
     yield* Deferred.succeed(continueTransaction, undefined);
-    expect(yield* Fiber.join(pending)).toEqual({ importedCount: 0, skippedCount: 0 });
-    expect(yield* importer.run).toEqual({ importedCount: 0, skippedCount: 0 });
+    expect(yield* Fiber.join(pending)).toEqual({
+      importedCount: 0,
+      skippedCount: 0,
+      threadIds: [],
+    });
+    expect(yield* importer.run).toEqual({ importedCount: 0, skippedCount: 0, threadIds: [] });
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const events = yield* EventStore.EventStoreV2;
     const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
@@ -355,7 +377,7 @@ it.effect(
       const threadId = importId(source);
       const importer = yield* makeImporter([source]);
       yield* sql`CREATE TEMP TRIGGER fail_import BEFORE INSERT ON orchestration_events WHEN NEW.event_type = 'message.updated' BEGIN SELECT RAISE(ABORT, 'test publication failure'); END`;
-      expect(yield* importer.run).toEqual({ importedCount: 0, skippedCount: 1 });
+      expect(yield* importer.run).toEqual({ importedCount: 0, skippedCount: 1, threadIds: [] });
       expect(yield* events.read({ threadId }).pipe(Stream.runCollect)).toEqual([]);
       expect(yield* Effect.option(projections.getThread(threadId))).toEqual(Option.none());
       expect(yield* runtimes.list()).toEqual([]);
@@ -363,15 +385,23 @@ it.effect(
       yield* sql`DROP TRIGGER fail_import`;
 
       yield* sql`CREATE TEMP TRIGGER fail_runtime BEFORE INSERT ON provider_session_runtime BEGIN SELECT RAISE(ABORT, 'test runtime failure'); END`;
-      expect(yield* importer.run).toEqual({ importedCount: 0, skippedCount: 1 });
+      expect(yield* importer.run).toEqual({ importedCount: 0, skippedCount: 1, threadIds: [] });
       const committed = yield* events.read({ threadId }).pipe(Stream.runCollect);
       expect(committed).toHaveLength(6);
       expect(importer.published).toHaveLength(6);
       expect(yield* runtimes.list()).toEqual([]);
       yield* sql`DROP TRIGGER fail_runtime`;
 
-      expect(yield* importer.run).toEqual({ importedCount: 1, skippedCount: 0 });
-      expect(yield* importer.run).toEqual({ importedCount: 1, skippedCount: 0 });
+      expect(yield* importer.run).toEqual({
+        importedCount: 1,
+        skippedCount: 0,
+        threadIds: [threadId],
+      });
+      expect(yield* importer.run).toEqual({
+        importedCount: 1,
+        skippedCount: 0,
+        threadIds: [threadId],
+      });
       expect(yield* events.read({ threadId }).pipe(Stream.runCollect)).toEqual(committed);
       expect(importer.published).toHaveLength(6);
       expect(
@@ -385,4 +415,87 @@ it.effect(
         runtimePayload: { importedTranscripts: [source.source] },
       });
     }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("imports only the requested session and returns its thread without duplicating it", () =>
+  Effect.gen(function* () {
+    const events = yield* EventStore.EventStoreV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const first = candidate(
+      CLAUDE_MODEL_SELECTION,
+      "0f3c2d6e-1b4a-4c8d-9e2f-3a5b7c9d1e2f",
+      "claudeAgent",
+    );
+    const second = candidate(
+      CLAUDE_MODEL_SELECTION,
+      "7a1e9b2c-3d4f-4a5b-8c6d-7e8f9a0b1c2d",
+      "claudeAgent",
+    );
+    const importer = yield* makeImporter([first, second]);
+
+    const result = { importedCount: 1, skippedCount: 0, threadIds: [importId(second)] };
+    expect(yield* importer.runWith([second.source.providerSessionId])).toEqual(result);
+    expect(yield* Effect.option(projections.getThread(importId(first)))).toEqual(Option.none());
+    const committed = yield* events.read({ threadId: importId(second) }).pipe(Stream.runCollect);
+    expect(committed).toHaveLength(6);
+
+    expect(yield* importer.runWith([second.source.providerSessionId])).toEqual(result);
+    expect(yield* events.read({ threadId: importId(second) }).pipe(Stream.runCollect)).toEqual(
+      committed,
+    );
+    expect(importer.published).toHaveLength(6);
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
+
+it.effect("lists Claude sessions, marking imported ones and leaving out sessions T3 started", () =>
+  Effect.gen(function* () {
+    const claude = (providerSessionId: string) =>
+      candidate(CLAUDE_MODEL_SELECTION, providerSessionId, "claudeAgent");
+    const imported = claude("0f3c2d6e-1b4a-4c8d-9e2f-3a5b7c9d1e2f");
+    const native = claude("7a1e9b2c-3d4f-4a5b-8c6d-7e8f9a0b1c2d");
+    const fresh = claude("c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f");
+    const archived = claude("1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9");
+    const deleted = claude("9e8d7c6b-5a49-4382-9170-f6e5d4c3b2a1");
+    // Another Claude instance sharing the same home started this one; the scanner credits
+    // the transcript to the default instance.
+    const sharedHome = claude("5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d");
+    const codex = candidate(CODEX_MODEL_SELECTION, "codex-session");
+    yield* seedOwner(native);
+    yield* seedOwner(archived, "archived", importId(archived));
+    yield* seedOwner(deleted, "deleted", importId(deleted));
+    yield* seedOwner(
+      candidate(
+        { ...CLAUDE_MODEL_SELECTION, instanceId: ProviderInstanceId.make("claude-other") },
+        sharedHome.source.providerSessionId,
+        "claudeAgent",
+      ),
+    );
+    const importer = yield* makeImporter([
+      imported,
+      native,
+      fresh,
+      archived,
+      deleted,
+      sharedHome,
+      codex,
+    ]);
+    yield* importer.runWith([imported.source.providerSessionId]);
+
+    const summary = (source: ReturnType<typeof candidate>) => ({
+      providerInstanceId: CLAUDE_MODEL_SELECTION.instanceId,
+      providerSessionId: source.source.providerSessionId,
+      title: "Imported thread",
+      model: CLAUDE_MODEL_SELECTION.model,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      messageCount: 2,
+    });
+    expect(yield* importer.list).toEqual({
+      sessions: [
+        { ...summary(imported), threadId: importId(imported) },
+        summary(fresh),
+        { ...summary(archived), threadId: importId(archived) },
+      ],
+    });
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
 );

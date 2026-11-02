@@ -1,5 +1,11 @@
 import * as Schema from "effect/Schema";
-import { IsoDateTime, NonNegativeInt, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  IsoDateTime,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const AgentSessionSource = Schema.Literals(["claudeAgent", "codex"]);
@@ -48,9 +54,34 @@ export const AgentSessionScanResult = Schema.Struct({
 });
 export type AgentSessionScanResult = typeof AgentSessionScanResult.Type;
 
+export const AgentSessionListInput = Schema.Struct({
+  projectId: ProjectId,
+});
+export type AgentSessionListInput = typeof AgentSessionListInput.Type;
+
+export const AgentSessionListItem = Schema.Struct({
+  providerInstanceId: ProviderInstanceId,
+  providerSessionId: TrimmedNonEmptyString,
+  title: Schema.String,
+  model: Schema.NullOr(Schema.String),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  messageCount: NonNegativeInt,
+  // Set when a T3 thread already holds this session, so a client can open it instead of importing.
+  threadId: Schema.optional(ThreadId),
+});
+export type AgentSessionListItem = typeof AgentSessionListItem.Type;
+
+export const AgentSessionListResult = Schema.Struct({
+  sessions: Schema.Array(AgentSessionListItem),
+});
+export type AgentSessionListResult = typeof AgentSessionListResult.Type;
+
 export const AgentSessionImportInput = Schema.Struct({
   projectId: ProjectId,
   expectedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
+  // Without it, every importable session of the project is imported.
+  sessionIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
 export type AgentSessionImportInput = typeof AgentSessionImportInput.Type;
 
@@ -75,6 +106,8 @@ export class AgentSessionImportProjectChangedError extends Schema.TaggedError<Ag
 export const AgentSessionImportResult = Schema.Struct({
   importedCount: NonNegativeInt,
   skippedCount: NonNegativeInt,
+  // Optional so a newer client still decodes an older server's result.
+  threadIds: Schema.optional(Schema.Array(ThreadId)),
 });
 export type AgentSessionImportResult = typeof AgentSessionImportResult.Type;
 

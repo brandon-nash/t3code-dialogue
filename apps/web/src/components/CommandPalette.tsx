@@ -61,6 +61,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  HistoryIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -221,6 +222,7 @@ import {
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { Checkbox } from "./ui/checkbox";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
+import { openExistingSessionPicker } from "./OpenExistingSessionDialog";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
@@ -1179,6 +1181,23 @@ function OpenCommandPaletteDialog(props: {
           });
         },
       });
+      if (contextualProjectRef !== null) {
+        actionItems.push({
+          kind: "action",
+          value: "action:open-existing-session",
+          searchTerms: ["open", "existing", "session", "claude", "import", "resume", "continue"],
+          title: (
+            <>
+              Open existing session in <span className="font-semibold">{activeProjectTitle}</span>
+            </>
+          ),
+          searchTitle: `Open existing session in ${activeProjectTitle}`,
+          icon: <HistoryIcon className={ITEM_ICON_CLASS} />,
+          run: async () => {
+            openExistingSessionPicker(contextualProjectRef);
+          },
+        });
+      }
     }
 
     actionItems.push({
