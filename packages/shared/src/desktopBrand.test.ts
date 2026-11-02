@@ -6,7 +6,7 @@ describe("resolveDesktopBrand", () => {
   it("defaults to the official brand", () => {
     expect(resolveDesktopBrand(undefined)).toBe(DESKTOP_BRANDS.t3code);
     expect(resolveDesktopBrand("  ")).toBe(DESKTOP_BRANDS.t3code);
-    expect(resolveDesktopBrand("dialogue")).toBe(DESKTOP_BRANDS.dialogue);
+    expect(resolveDesktopBrand("extended")).toBe(DESKTOP_BRANDS.extended);
   });
 
   it("refuses a brand it does not know", () => {
@@ -15,7 +15,7 @@ describe("resolveDesktopBrand", () => {
 
   it("gives the fork its own identity on every field the OS or server keys on", () => {
     const official = DESKTOP_BRANDS.t3code;
-    const fork = DESKTOP_BRANDS.dialogue;
+    const fork = DESKTOP_BRANDS.extended;
     for (const key of ["appId", "profileName", "scheme", "artifactPrefix", "baseName"] as const) {
       expect(fork[key]).not.toBe(official[key]);
     }

@@ -3,7 +3,7 @@
  * official one: every field that macOS, Chromium, or the server keys on is distinct.
  */
 export interface DesktopBrand {
-  readonly id: "t3code" | "dialogue";
+  readonly id: "t3code" | "extended";
   readonly baseName: string;
   /** Bundle id on macOS and app user model id on Windows. */
   readonly appId: string;
@@ -29,23 +29,23 @@ export const DESKTOP_BRANDS: Record<DesktopBrand["id"], DesktopBrand> = {
     scheme: "t3code",
     artifactPrefix: "T3-Code",
   },
-  dialogue: {
-    id: "dialogue",
-    baseName: "T3 Dialogue",
-    appId: "com.brandon-nash.t3code-dialogue",
-    profileName: "t3code-dialogue",
-    homeSegments: [".t3", "dialogue"],
+  extended: {
+    id: "extended",
+    baseName: "T3 Extended",
+    appId: "com.brandon-nash.t3code-extended",
+    profileName: "t3code-extended",
+    homeSegments: [".t3", "extended"],
     sharedVoiceSegments: [".t3", "voice"],
-    scheme: "t3code-dialogue",
-    artifactPrefix: "T3-Dialogue",
+    scheme: "t3code-extended",
+    artifactPrefix: "T3-Extended",
   },
 };
 
 export function resolveDesktopBrand(id: string | undefined): DesktopBrand {
   const trimmed = id?.trim() ?? "";
   if (trimmed === "") return DESKTOP_BRANDS.t3code;
-  if (trimmed === "t3code" || trimmed === "dialogue") return DESKTOP_BRANDS[trimmed];
+  if (trimmed === "t3code" || trimmed === "extended") return DESKTOP_BRANDS[trimmed];
   throw new Error(
-    `Unknown desktop brand "${trimmed}". T3CODE_DESKTOP_BRAND accepts "t3code" or "dialogue".`,
+    `Unknown desktop brand "${trimmed}". T3CODE_DESKTOP_BRAND accepts "t3code" or "extended".`,
   );
 }

@@ -1,6 +1,6 @@
-# T3 Dialogue: this fork
+# T3 Extended: this fork
 
-T3 Dialogue is a personal fork of [T3 Code](https://github.com/pingdotgg/t3code) that adds a
+T3 Extended is a personal fork of [T3 Code](https://github.com/pingdotgg/t3code) that adds a
 fully local voice mode and a few workflow features. It tracks upstream `main` and installs
 beside the official desktop app, so you can run both.
 
@@ -14,28 +14,35 @@ beside the official desktop app, so you can run both.
 - **Open an existing Claude Code session.** Bring a session you started in a terminal into T3
   Code as a thread and keep going there.
   [Open an existing Claude Code session](./user/thread-sidebar.md#open-an-existing-claude-code-session)
-- **A side-by-side desktop app.** The fork builds as "T3 Dialogue" with its own bundle id, URL
+- **A side-by-side desktop app.** The fork builds as "T3 Extended" with its own bundle id, URL
   scheme, and T3 home, so it never touches the official app's data.
-  [ADR 0009](./adr/0009-fork-desktop-identity.md)
+  [ADR 0010](./adr/0010-fork-brand-is-t3-extended.md)
 
 The reasoning behind these is recorded as
 [architecture decision records](./adr/README.md).
 
 ## Install the desktop app
 
-There are no published releases. Build the DMG (below), open it, and drag **T3 Dialogue** to
+There are no published releases. Build the DMG (below), open it, and drag **T3 Extended** to
 Applications. It coexists with T3 Code: a separate icon, separate settings, and its own data in
-`~/.t3/dialogue`. The voice models in `~/.t3/voice` are shared, so both apps can use them.
+`~/.t3/extended`. The voice models in `~/.t3/voice` are shared, so both apps can use them.
 
 The first launch runs the same setup as a fresh T3 Code install. Point it at the same projects
 if you like; the two apps keep separate thread histories.
 
+If you ran the earlier "T3 Dialogue" build, quit it and move its data before the first launch so
+your threads come along:
+
+```sh
+mv ~/.t3/dialogue ~/.t3/extended
+```
+
 ### Update
 
-Local builds have no update feed, so the in-app update button cannot update T3 Dialogue itself.
-It still updates servers and providers. To move to a newer build, quit T3 Dialogue, build a new
+Local builds have no update feed, so the in-app update button cannot update T3 Extended itself.
+It still updates servers and providers. To move to a newer build, quit T3 Extended, build a new
 DMG, and drag it over the old copy in Applications. Threads and settings stay in
-`~/.t3/dialogue`.
+`~/.t3/extended`.
 
 ## Build the desktop app
 
@@ -44,10 +51,10 @@ From a checkout of this fork on macOS, with the
 
 ```sh
 vp i
-T3CODE_DESKTOP_BRAND=dialogue vp run dist:desktop:dmg
+T3CODE_DESKTOP_BRAND=extended vp run dist:desktop:dmg
 ```
 
-The DMG lands in `release/` at the repository root as `T3-Dialogue-<version>-<arch>.dmg`.
+The DMG lands in `release/` at the repository root as `T3-Extended-<version>-<arch>.dmg`.
 Without the brand variable the build is a plain T3 Code that would replace the official app.
 [Fork brand](./operations/development.md#fork-brand) lists what the brand changes.
 

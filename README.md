@@ -1,6 +1,6 @@
 # T3 Code
 
-> **This fork** builds as **T3 Dialogue**, adds a fully local voice mode (dictation and spoken
+> **This fork** builds as **T3 Extended**, adds a fully local voice mode (dictation and spoken
 > replies), and can open an existing Claude Code session as a thread. It installs beside the
 > official app. Start at [docs/fork.md](docs/fork.md). Everything below is upstream's README.
 
