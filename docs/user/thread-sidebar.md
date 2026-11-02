@@ -49,6 +49,28 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+### Open an existing Claude Code session
+
+A Claude Code session you started in a terminal can continue as a T3 Code thread.
+On web and desktop, click **Open existing session** next to **New thread** in the
+sidebar header, or run **Open existing session in <project>** from the command
+palette. The picker lists Claude Code sessions from the last 30 days that ran in
+the project's directory outside T3 Code, newest first, with each one's title, age,
+message count, and model. Sessions T3 Code started itself are not listed; they are
+already threads in the sidebar.
+
+Choose **Import** to create a thread from a session. T3 Code opens the thread, and
+your next message resumes the same Claude session, so the agent keeps its context.
+A session you have already imported shows **Open** instead and goes to its existing
+thread; importing never duplicates history. Finish the session in the terminal
+before importing it, since both would write to the same transcript. If a session
+you just started is missing, **Refresh** rescans.
+
+Import keeps the same history as [project import](./welcome-wizard.md#import-your-projects):
+the first prompt and the newest messages, up to 200, without tool activity. It
+needs permission to import sessions on that environment; without it the picker
+lists sessions but offers no **Import**. Mobile does not have the picker yet.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

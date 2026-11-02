@@ -77,7 +77,7 @@ Open **Settings > Storage** and turn on automatic worktree cleanup. You can also
 
 ## Is there voice input?
 
-On iPhone, yes. You need iOS 26 or later. Tap the mic in the composer, talk, check the text, then send. Web, desktop, and Android do not have it yet. [Voice input on iPhone](./composer.md#voice-input-on-iphone)
+Yes. On web and desktop, dictation and spoken replies run on the machine that hosts your T3 Code server with local speech models, once those models are installed there. Click the microphone or press `mod+'` to dictate, and turn on the speaker to hear replies read aloud. On iPhone with iOS 26 or later, tap the mic in the composer, talk, check the text, then send. Android does not have it yet. [Dictation and spoken replies](./composer.md#dictation-and-spoken-replies-on-web-and-desktop) · [Voice input on iPhone](./composer.md#voice-input-on-iphone)
 
 ## Does it work on Windows, Mac, and Linux?
 

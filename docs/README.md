@@ -1,5 +1,8 @@
 # T3 Code docs
 
+This fork adds local voice mode, a side-by-side "T3 Dialogue" desktop build, and opening
+existing Claude Code sessions. Start at [the fork guide](./fork.md).
+
 ## Using T3 Code
 
 - [Install T3 Code](./user/install.md)
