@@ -427,7 +427,13 @@ const make = Effect.gen(function* () {
         const started = performance.now();
         const audio = yield* Effect.tryPromise({
           try: () =>
-            model.generateAsync({ text: spokenText, sid: speakerId, speed: settings.ttsSpeed }),
+            model.generateAsync({
+              text: spokenText,
+              sid: speakerId,
+              speed: settings.ttsSpeed,
+              // Electron's Node forbids external ArrayBuffers; the default would reject every reply.
+              enableExternalBuffer: false,
+            }),
           catch: (cause) =>
             new VoiceEngineError({ detail: `Speech synthesis failed: ${errorDetail(cause)}` }),
         });

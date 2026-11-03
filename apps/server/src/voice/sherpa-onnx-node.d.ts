@@ -19,6 +19,8 @@ declare module "sherpa-onnx-node" {
       text: string;
       sid: number;
       speed: number;
+      /** Required here: Electron forbids external ArrayBuffers, and the addon defaults to one. */
+      enableExternalBuffer: boolean;
     }): Promise<{ samples: Float32Array; sampleRate: number }>;
   }
 
